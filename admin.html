@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gayza Express Admin</title>
+  <link rel="stylesheet" href="gab.css">
+</head>
+
+<body>
+  <main class="container" id="container">
+
+    <!-- ADMIN SIGN IN -->
+    <section id="loginBox">
+      <h1>Admin Login</h1>
+      <p class="subtitle">Gayza Express staff only</p>
+
+      <form id="loginForm">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" placeholder="Enter your admin email" autocomplete="email" required>
+
+        <label for="loginPass">Password</label>
+        <div class="password-wrap">
+          <input type="password" id="loginPass" placeholder="Enter your password" autocomplete="current-password" required>
+          <button type="button" class="toggle" id="togglePass">Show</button>
+        </div>
+
+        <button type="submit" class="main-btn" id="loginBtn">Sign In</button>
+      </form>
+    </section>
+
+    <!-- ADMIN DASHBOARD -->
+    <section id="dashboard" hidden>
+      <h1>📦 Admin Panel</h1>
+      <p id="welcome" class="subtitle">Welcome!</p>
+
+      <div id="adminStats" class="stats"></div>
+
+      <div class="admin-toolbar">
+        <select id="adminFilter" aria-label="Filter by status">
+          <option value="all">All statuses</option>
+          <option value="pending">Finding driver</option>
+          <option value="accepted">Driver assigned</option>
+          <option value="ontheway">On the way</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <input type="search" id="adminSearch" placeholder="Search order no., name, phone, address" autocomplete="off">
+        <button type="button" class="ghost-btn small" id="adminRefresh">Refresh</button>
+      </div>
+
+      <div id="adminList"></div>
+
+      <button type="button" class="ghost-btn" id="logoutBtn">Log Out</button>
+    </section>
+
+    <p id="message" role="status" aria-live="polite"></p>
+  </main>
+
+  <script type="module" src="admin.js"></script>
+</body>
+</html>

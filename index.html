@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gabriel Account Management</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="gab.css">
+</head>
+
+<body>
+  <main class="container" id="container">
+
+    <!-- SIGN IN -->
+    <section id="loginBox">
+      <h1>Welcome Back</h1>
+      <p class="subtitle">Sign in to book your ride</p>
+
+      <form id="loginForm">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" placeholder="Enter your email" autocomplete="email" required>
+
+        <label for="loginPass">Password</label>
+        <div class="password-wrap">
+          <input type="password" id="loginPass" placeholder="Enter your password" autocomplete="current-password" required>
+          <button type="button" class="toggle" onclick="togglePassword('loginPass', this)">Show</button>
+        </div>
+
+        <button type="submit" class="main-btn">Sign In</button>
+      </form>
+
+      <p class="link-row">
+        <button type="button" class="text-btn" onclick="showForgotPassword()">Forgot Password?</button>
+      </p>
+      <p class="link-row">
+        Don't have an account?
+        <button type="button" class="text-btn" onclick="showSignup()">Sign Up</button>
+      </p>
+    </section>
+
+    <!-- SIGN UP -->
+    <section id="signupBox" hidden>
+      <h1>Create Account</h1>
+      <p class="subtitle">Register your information below</p>
+
+      <form id="signupForm">
+        <label for="firstName">First Name</label>
+        <input type="text" id="firstName" placeholder="Enter your first name" autocomplete="given-name" required>
+
+        <label for="lastName">Last Name</label>
+        <input type="text" id="lastName" placeholder="Enter your last name" autocomplete="family-name" required>
+
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Choose a username" minlength="3" maxlength="20" autocomplete="username" required>
+        <p class="hint">Use 3–20 letters, numbers, dots, or underscores.</p>
+
+        <label for="signupEmail">Email</label>
+        <input type="email" id="signupEmail" placeholder="Enter your email" autocomplete="email" required>
+
+        <label for="birthday">Date of Birth</label>
+        <input type="date" id="birthday" autocomplete="bday" required>
+
+        <label for="gender">Gender</label>
+        <select id="gender" required>
+          <option value="">Select gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Prefer not to say">Prefer not to say</option>
+        </select>
+
+        <label for="signupPass">Password</label>
+        <div class="password-wrap">
+          <input type="password" id="signupPass" placeholder="Create a password" autocomplete="new-password" required>
+          <button type="button" class="toggle" onclick="togglePassword('signupPass', this)">Show</button>
+        </div>
+
+        <div class="password-requirements">
+          <h3>Password requirements</h3>
+          <p id="reqLength" class="requirement"><span class="check">○</span> At least 8 characters</p>
+          <p id="reqUpper" class="requirement"><span class="check">○</span> One uppercase letter</p>
+          <p id="reqNumber" class="requirement"><span class="check">○</span> One number</p>
+          <p id="reqSpecial" class="requirement"><span class="check">○</span> One special character</p>
+        </div>
+
+        <label for="confirmPass">Confirm Password</label>
+        <div class="password-wrap">
+          <input type="password" id="confirmPass" placeholder="Confirm your password" autocomplete="new-password" required>
+          <button type="button" class="toggle" onclick="togglePassword('confirmPass', this)">Show</button>
+        </div>
+        <p id="matchMessage" class="match-message" aria-live="polite"></p>
+
+        <label class="terms" for="terms">
+          <input type="checkbox" id="terms" required>
+          <span>I agree to the Terms and Privacy Policy.</span>
+        </label>
+
+        <button type="submit" class="main-btn" id="signupButton">Sign Up</button>
+      </form>
+
+      <p class="link-row">
+        Already have an account?
+        <button type="button" class="text-btn" onclick="showLogin()">Log In</button>
+      </p>
+    </section>
+
+    <!-- FORGOT PASSWORD -->
+    <section id="forgotBox" hidden>
+      <h1>Forgot Password?</h1>
+      <p class="subtitle">Enter your email to receive a password reset link.</p>
+
+      <form id="forgotForm">
+        <label for="forgotEmail">Email Address</label>
+        <input type="email" id="forgotEmail" placeholder="Enter your registered email" autocomplete="email" required>
+        <button type="submit" class="main-btn">Send Reset Link</button>
+      </form>
+
+      <p class="link-row">
+        <button type="button" class="text-btn" onclick="showLogin()">Back to Log In</button>
+      </p>
+    </section>
+
+    <!-- =========================
+         DASHBOARD / DELIVERY BOOKING
+    ========================== -->
+    <section id="dashboard" hidden>
+
+      <h1>📦 Gayza Express</h1>
+      <p id="welcome" class="subtitle">Welcome!</p>
+
+      <nav class="tabs">
+        <button type="button" class="tab active" data-tab="tabBook">Book</button>
+        <button type="button" class="tab" data-tab="tabOrders">My Orders</button>
+        <button type="button" class="tab" data-tab="tabProfile">Profile</button>
+      </nav>
+
+      <!-- BOOK -->
+      <div id="tabBook" class="tab-panel">
+        <form id="orderForm">
+
+          <label>Choose a vehicle</label>
+          <div id="vehicleList" class="vehicle-grid"></div>
+
+          <h2 class="section-title">Route</h2>
+
+          <label for="dlPickup">Pick-up address</label>
+          <input type="text" id="dlPickup" placeholder="Where should we pick it up?" maxlength="120" autocomplete="off">
+
+          <label for="dlPhone">Your phone number</label>
+          <input type="tel" id="dlPhone" placeholder="09171234567" maxlength="11" inputmode="numeric" autocomplete="tel">
+
+          <label for="dlDropoff">Drop-off address</label>
+          <input type="text" id="dlDropoff" placeholder="Where should we deliver it?" maxlength="120" autocomplete="off">
+
+          <div class="row2">
+            <div>
+              <label for="dlReceiver">Receiver name</label>
+              <input type="text" id="dlReceiver" placeholder="Who receives it?" maxlength="60">
+            </div>
+            <div>
+              <label for="dlReceiverPhone">Receiver phone</label>
+              <input type="tel" id="dlReceiverPhone" placeholder="09171234567" maxlength="11" inputmode="numeric">
+            </div>
+          </div>
+
+          <label for="dlKm">Distance (km)</label>
+          <input type="number" id="dlKm" placeholder="Calculated automatically" min="1" max="100" step="0.1" inputmode="decimal">
+          <p id="dlKmStatus" class="hint">Distance is calculated automatically from your addresses. You can also type it in.</p>
+          <div class="card-actions">
+            <button type="button" class="ghost-btn small" id="dlAutoBtn">Calculate distance</button>
+          </div>
+          <div class="card-actions">
+            <button type="button" class="ghost-btn small" id="dlPickMapBtn">Pick pick-up on map</button>
+            <button type="button" class="ghost-btn small" id="dlDropMapBtn">Pick drop-off on map</button>
+          </div>
+          <div id="routeMap" class="route-map"></div>
+
+          <h2 class="section-title">Details</h2>
+
+          <label for="dlItem">What are we delivering?</label>
+          <input type="text" id="dlItem" placeholder="Documents, groceries, a box of tools..." maxlength="120">
+
+          <label for="dlWhen">When?</label>
+          <select id="dlWhen">
+            <option value="now">Now</option>
+            <option value="later">Schedule for later</option>
+          </select>
+
+          <div id="dlLater" class="row2" hidden>
+            <div>
+              <label for="dlDate">Date</label>
+              <input type="date" id="dlDate">
+            </div>
+            <div>
+              <label for="dlTime">Time</label>
+              <input type="time" id="dlTime" value="09:00">
+            </div>
+          </div>
+
+          <label class="terms" for="dlHelper">
+            <input type="checkbox" id="dlHelper">
+            <span id="dlHelperLabel">Need a loading helper</span>
+          </label>
+
+          <label class="terms" for="dlRoundTrip">
+            <input type="checkbox" id="dlRoundTrip">
+            <span>Round trip (driver returns to the pick-up address)</span>
+          </label>
+
+          <label for="dlPayment">Payment</label>
+          <select id="dlPayment">
+            <option value="Cash">Cash (pay the driver)</option>
+            <option value="GCash">GCash</option>
+          </select>
+
+          <label for="dlNotes">Note for the driver (optional)</label>
+          <input type="text" id="dlNotes" placeholder="Call when you arrive" maxlength="120">
+
+          <div id="fareSummary" class="summary">Enter the distance to see your fare</div>
+
+          <p id="orderMessage" class="modal-message" role="status" aria-live="polite"></p>
+
+          <button type="submit" class="main-btn" id="orderBtn">Book now</button>
+        </form>
+      </div>
+
+      <!-- MY ORDERS -->
+      <div id="tabOrders" class="tab-panel" hidden>
+        <div id="orderList"></div>
+      </div>
+
+      <!-- PROFILE -->
+      <div id="tabProfile" class="tab-panel" hidden>
+        <div class="profile">
+          <p><strong>Full Name:</strong> <span id="profileName">-</span></p>
+          <p><strong>Email:</strong> <span id="profileEmail">-</span></p>
+          <p><strong>Username:</strong> <span id="profileUsername">-</span></p>
+        </div>
+        <button type="button" class="main-btn" onclick="logout()">Log Out</button>
+      </div>
+
+    </section>
+
+
+    <!-- MESSAGE AREA -->
+    <p id="message" role="status" aria-live="polite"></p>
+  </main>
+
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script type="module" src="index.js"></script>
+</body>
+</html>
