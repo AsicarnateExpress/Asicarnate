@@ -153,6 +153,92 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 
+// ---------- Revenue chart, week calendar, completion ring ----------
+// Revenue = total of orders marked "Completed".
+// Bars show each day of the selected week (by the day the order was placed).
+let weekOffset = 0;   // 0 = this week, -1 = last week, ...
+
+function shortMoney(n) {
+  return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(Math.round(n));
+}
+
+function renderRevenue() {
+  if (!$("revChart")) return;
+
+  const done = adminOrders.filter((o) => o.status === "completed");
+  const allTime = done.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+  $("revTotal").textContent = money(allTime);
+
+  // Monday of the selected week
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + weekOffset * 7);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const from = new Date(monday);
+    from.setDate(monday.getDate() + i);
+    const to = new Date(from);
+    to.setDate(from.getDate() + 1);
+
+    const orders = done.filter((o) => o.createdMs >= from.getTime() && o.createdMs < to.getTime());
+    return {
+      date: from,
+      revenue: orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0),
+      count: orders.length,
+      isToday: from.getTime() === now.getTime()
+    };
+  });
+
+  const weekTotal = days.reduce((sum, d) => sum + d.revenue, 0);
+  const max = Math.max(...days.map((d) => d.revenue), 1);
+  const dayName = (d) => d.date.toLocaleDateString("en-US", { weekday: "short" });
+
+  // Bar chart
+  $("revChart").innerHTML = `
+    <p class="rev-week">This week: <strong>${money(weekTotal)}</strong></p>
+    <div class="rev-bars">
+      ${days.map((d) => `
+        <div class="rev-col ${d.isToday ? "today" : ""}">
+          <span class="rev-val">${d.revenue ? shortMoney(d.revenue) : ""}</span>
+          <div class="rev-bar-wrap">
+            <div class="rev-bar ${d.revenue ? "" : "empty"}" style="height:${d.revenue ? Math.max(6, (d.revenue / max) * 100) : 3}%"></div>
+          </div>
+          <span class="rev-day">${dayName(d)}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+
+  // Week calendar
+  const fmt = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  $("calTitle").textContent = `${fmt(days[0].date)} – ${fmt(days[6].date)}`;
+  $("calDays").innerHTML = days.map((d) => `
+    <div class="cal-day ${d.isToday ? "today" : ""} ${d.count ? "has" : ""}">
+      <span>${dayName(d).slice(0, 3)}</span>
+      <strong>${d.date.getDate()}</strong>
+    </div>
+  `).join("");
+
+  // Completion ring (cancelled orders are not counted)
+  const counted = adminOrders.filter((o) => o.status !== "cancelled").length;
+  const pct = counted ? Math.round((done.length / counted) * 100) : 0;
+  $("completionSub").textContent = `${done.length} of ${counted} orders completed`;
+  $("completionRing").style.setProperty("--pct", pct);
+  $("completionRing").querySelector("span").textContent = `${pct}%`;
+}
+
+$("calPrev")?.addEventListener("click", () => {
+  weekOffset--;
+  renderRevenue();
+});
+
+$("calNext")?.addEventListener("click", () => {
+  if (weekOffset < 0) weekOffset++;
+  renderRevenue();
+});
+
+
 // ---------- Orders ----------
 async function loadOrders() {
   const list = $("adminList");
@@ -188,6 +274,8 @@ function render() {
     <div class="stat"><strong>${count("accepted") + count("ontheway")}</strong><span>Active</span></div>
     <div class="stat"><strong>${money(sales)}</strong><span>Completed sales</span></div>
   `;
+
+  renderRevenue();
 
   const shown = adminOrders.filter((o) => {
     if (filter !== "all" && o.status !== filter) return false;
