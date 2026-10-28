@@ -28,7 +28,9 @@ const firebaseConfig = {
   measurementId: "G-6D5240BSMV"
 };
 
-const app = initializeApp(firebaseConfig);
+// Named app = separate login session from the client page (index.js uses the default app),
+// so signing in as admin no longer replaces the customer's account.
+const app = initializeApp(firebaseConfig, "admin");
 const auth = getAuth(app);
 const db = getFirestore(app);
 
