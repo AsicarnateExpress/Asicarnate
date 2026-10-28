@@ -1,0 +1,133 @@
+/* GCash payment, receipt, availability + remittance add-on */
+
+/* ---------- customer: availability banner ---------- */
+.gx-avail {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.gx-avail:empty { display: none; }
+.gx-avail.ok  { background: #dcfce7; color: #166534; }
+.gx-avail.bad { background: #fee2e2; color: #991b1b; }
+
+/* ---------- customer: GCash panel ---------- */
+.gx-pay {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  text-align: center;
+}
+.gx-pay img {
+  width: 210px;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+.gx-pay .gx-name { margin: 8px 0 0; color: #1e3a8a; font-weight: bold; }
+.gx-pay .gx-num  { margin: 2px 0 8px; color: #475569; font-size: 14px; }
+.gx-pay .gx-amt  { margin: 4px 0 10px; color: #1e3a8a; font-size: 22px; font-weight: bold; }
+.gx-pay label    { text-align: left; }
+.gx-pay .hint    { text-align: left; }
+.gx-pay .gx-noqr { color: #92400e; font-size: 13px; }
+
+/* ---------- receipt ---------- */
+.gx-receipt .c-table td:first-child { color: #64748b; width: 38%; }
+.gx-receipt .c-table td:last-child  { text-align: right; overflow-wrap: anywhere; }
+.gx-stamp {
+  margin: 12px 0 0;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+.gx-stamp.paid { background: #dcfce7; color: #166534; }
+.gx-stamp.wait { background: #fef3c7; color: #92400e; }
+.gx-stamp.cash { background: #e0e7ff; color: #3730a3; }
+.gx-stamp.bad  { background: #fee2e2; color: #991b1b; }
+
+.gx-receipt-list { margin: 12px 0 0; }
+.gx-receipt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+}
+.gx-receipt-row small { display: block; color: #64748b; }
+
+/* ---------- admin: payments + remittance ---------- */
+.gx-admin { margin: 22px 0 6px; padding-top: 18px; border-top: 1px solid #ede9fe; }
+.gx-admin h2 { margin: 0 0 12px; color: #1f1b2e; font-size: 18px; }
+
+.gx-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #f5f3ff;
+}
+.gx-tabs button {
+  flex: 1;
+  padding: 9px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5b21b6;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.gx-tabs button.active { background: #6d28d9; color: #fff; }
+
+.gx-sum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.gx-sum div { padding: 12px; border-radius: 14px; background: #f5f3ff; }
+.gx-sum strong { display: block; color: #4c1d95; font-size: 18px; }
+.gx-sum span { color: #64748b; font-size: 12px; }
+
+.gx-info {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #faf5ff;
+  color: #4c1d95;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.gx-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.gx-actions input { flex: 1 1 180px; padding: 9px 12px; font-size: 14px; border-radius: 999px; }
+.gx-btn {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #6d28d9;
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.gx-btn:hover { background: #5b21b6; }
+.gx-btn.danger { background: #fff; border: 1px solid #fca5a5; color: #b91c1c; }
+
+@media (max-width: 520px) {
+  .gx-sum { grid-template-columns: 1fr; }
+}
+
+@media print {
+  body > *:not(.gx-print-modal) { display: none !important; }
+  .gx-print-modal { position: static !important; background: none !important; padding: 0 !important; }
+  .gx-print-modal .gx-noprint { display: none !important; }
+  .gx-print-modal .modal-card { max-width: none; box-shadow: none; }
+}
+
+
