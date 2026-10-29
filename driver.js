@@ -59,7 +59,8 @@ const money = (n) => `₱${Number(n || 0).toLocaleString(undefined, { maximumFra
 const round2 = (n) => Math.round(n * 100) / 100;
 const share = (o) => round2((Number(o.total) || 0) * (1 - PLATFORM_RATE));   // driver earns
 const cut = (o) => round2((Number(o.total) || 0) * PLATFORM_RATE);           // driver remits (cash orders)
-const isCash = (o) => /cash/i.test(o.payment || "");
+// "Cash" only. (GCash orders are paid to you directly, so drivers do not remit them.)
+const isCash = (o) => /^\s*cash\b/i.test(o.payment || "");
 const VEHICLE_ICONS = { motorcycle: "🏍️", sedan: "🚗", van: "🚐", truck: "🚚" };
 const STATUS = {
   pending:   ["Finding driver", "wait"],

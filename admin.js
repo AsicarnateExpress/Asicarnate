@@ -528,7 +528,8 @@ async function toggleDriver(id, button) {
 // ---------- Remittances: verify your drivers' GCash payments ----------
 // Must match PLATFORM_RATE in driver.js
 const PLATFORM_RATE = 0.20;
-const isCash = (o) => /cash/i.test(o.payment || "");
+// "Cash" only. (GCash orders are paid to you directly, so drivers do not remit them.)
+const isCash = (o) => /^\s*cash\b/i.test(o.payment || "");
 const cutOf = (o) => Math.round((Number(o.total) || 0) * PLATFORM_RATE * 100) / 100;
 
 let remits = [];
