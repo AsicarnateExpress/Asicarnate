@@ -770,15 +770,15 @@ select:focus {
   border-radius: 22px;
   background:
     radial-gradient(circle at 100% 0%, rgba(167, 139, 250, 0.16), transparent 45%),
-    linear-gradient(160deg, #5b21b6, #4c1d95 70%);
-  box-shadow: 0 10px 28px rgba(124, 58, 237, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    linear-gradient(160deg, #5b21b6, #2e1065 70%);
+  box-shadow: 0 10px 28px rgba(46, 16, 101, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .ap-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 34px rgba(124, 58, 237, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 34px rgba(46, 16, 101, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .ap-card-head {
@@ -1021,7 +1021,7 @@ select:focus {
   position: absolute;
   inset: 8px;
   border-radius: 50%;
-  background: #4c1d95;
+  background: #2e1065;
 }
 
 .ring span {
@@ -1042,7 +1042,7 @@ select:focus {
 }
 
 /* =========================================================
-   THEME: LIGHT PURPLE + WHITE  (design only - no code changes)
+   THEME: DEEP PURPLE + WHITE + GOLD  (design only - no code changes)
    Applies to the client booking page AND the admin panel
 ========================================================= */
 body {
@@ -1050,7 +1050,7 @@ body {
   background:
     radial-gradient(circle at 15% 0%, rgba(167, 139, 250, 0.22), transparent 40%),
     radial-gradient(circle at 100% 30%, rgba(167, 139, 250, 0.25), transparent 45%),
-    linear-gradient(160deg, #0f172a, #4c1d95 60%, #5b21b6);
+    linear-gradient(160deg, #0f172a, #2e1065 60%, #5b21b6);
   background-attachment: fixed;
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
 }
@@ -1065,7 +1065,7 @@ body {
 
 /* headings */
 h1 {
-  color: #4c1d95;
+  color: #2e1065;
   font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -1080,7 +1080,7 @@ h1 {
   align-items: center;
   gap: 8px;
   margin: 22px 0 12px;
-  color: #4c1d95;
+  color: #2e1065;
   font-size: 18px;
   font-weight: 800;
 }
@@ -1185,7 +1185,7 @@ input[type="checkbox"] {
 .tabs {
   padding: 5px;
   border-radius: 16px;
-  background: #4c1d95;
+  background: #2e1065;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
@@ -1206,7 +1206,7 @@ input[type="checkbox"] {
   border: 2px solid #ddd6fe;
   border-radius: 16px;
   background: #faf8ff;
-  color: #4c1d95;
+  color: #2e1065;
   font-weight: bold;
   transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1228,9 +1228,9 @@ input[type="checkbox"] {
   border-radius: 18px;
   background:
     radial-gradient(circle at 100% 0%, rgba(167, 139, 250, 0.2), transparent 50%),
-    linear-gradient(160deg, #5b21b6, #4c1d95);
+    linear-gradient(160deg, #5b21b6, #2e1065);
   color: #ddd6fe;
-  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 10px 24px rgba(46, 16, 101, 0.35);
 }
 
 .summary strong {
@@ -1249,7 +1249,7 @@ input[type="checkbox"] {
   border: 1px solid #ddd6fe;
   border-radius: 18px;
   background: #faf8ff;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08);
+  box-shadow: 0 4px 14px rgba(91, 33, 182, 0.08);
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -1264,7 +1264,7 @@ input[type="checkbox"] {
 
 .booking-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.16);
+  box-shadow: 0 10px 24px rgba(91, 33, 182, 0.16);
 }
 
 .booking-card.cancelled::before {
@@ -1272,7 +1272,7 @@ input[type="checkbox"] {
 }
 
 .booking-top h3 {
-  color: #4c1d95;
+  color: #2e1065;
 }
 
 .price {
@@ -1335,7 +1335,7 @@ input[type="checkbox"] {
 .contract-box h4,
 .c-total td,
 .service-row strong {
-  color: #4c1d95;
+  color: #2e1065;
 }
 
 .contract-box {
@@ -1354,8 +1354,8 @@ input[type="checkbox"] {
   border-radius: 18px;
   background:
     radial-gradient(circle at 100% 0%, rgba(167, 139, 250, 0.18), transparent 55%),
-    linear-gradient(160deg, #5b21b6, #4c1d95);
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3);
+    linear-gradient(160deg, #5b21b6, #2e1065);
+  box-shadow: 0 8px 20px rgba(46, 16, 101, 0.3);
   transition: transform 0.2s ease;
 }
 
@@ -1387,64 +1387,25 @@ input[type="checkbox"] {
 }
 
 /* =========================================================
-   THEME: LIGHT PURPLE + WHITE  (design only - no code changes)
-   Turns the former dark navy cards into soft lavender cards
+   THEME: DEEP PURPLE + WHITE + GOLD  (design only - no code changes)
 ========================================================= */
 body {
   background:
-    radial-gradient(circle at 12% 0%, rgba(196, 181, 253, 0.55), transparent 45%),
-    radial-gradient(circle at 100% 35%, rgba(221, 214, 254, 0.7), transparent 50%),
-    linear-gradient(160deg, #faf8ff, #f1ecff 55%, #e9e0ff);
+    radial-gradient(circle at 12% 0%, rgba(167, 139, 250, 0.35), transparent 42%),
+    radial-gradient(circle at 100% 100%, rgba(250, 204, 21, 0.12), transparent 40%),
+    linear-gradient(160deg, #3b0764, #4c1d95 55%, #5b21b6);
   background-attachment: fixed;
 }
-.container { border-color: #ede9fe; box-shadow: 0 20px 50px rgba(124, 58, 237, 0.16); }
-.modal { background: rgba(76, 29, 149, 0.35); }
+.container { box-shadow: 0 24px 60px rgba(30, 5, 70, 0.5); }
+.modal { background: rgba(30, 5, 70, 0.7); }
 
-.tabs { background: #f3f0ff; box-shadow: inset 0 1px 4px rgba(124, 58, 237, 0.12); }
-.tab { color: #6d28d9; }
-.tab.active { color: #fff; }
-
-.summary {
-  border: 1px solid #ddd6fe;
-  background: radial-gradient(circle at 100% 0%, rgba(196, 181, 253, 0.35), transparent 50%), linear-gradient(160deg, #faf8ff, #f1ecff);
-  color: #4c1d95;
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.12);
-}
-.summary strong, .fare-row.total { color: #6d28d9; }
-.fare-row.total { border-top-color: #ddd6fe; }
-
-.stat {
-  border-color: #ddd6fe;
-  background: radial-gradient(circle at 100% 0%, rgba(196, 181, 253, 0.3), transparent 55%), linear-gradient(160deg, #ffffff, #f5f3ff);
-  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.12);
-}
-.stat strong { color: #6d28d9; }
-.stat span { color: #6b6290; }
-
-.ap-card {
-  border-color: #ddd6fe;
-  background: radial-gradient(circle at 100% 0%, rgba(196, 181, 253, 0.3), transparent 45%), linear-gradient(160deg, #ffffff, #f5f3ff 75%);
-  box-shadow: 0 10px 26px rgba(124, 58, 237, 0.13);
-}
-.ap-card:hover { box-shadow: 0 16px 34px rgba(124, 58, 237, 0.22); }
-.ap-card-head h2 { color: #6d28d9; }
-.ap-card-head h2::before { background: #8b5cf6; box-shadow: 0 0 8px rgba(139, 92, 246, 0.6); }
-.ap-total { background: linear-gradient(90deg, #a78bfa, #8b5cf6 55%, #6d28d9); -webkit-background-clip: text; background-clip: text; }
-.rev-week { background: rgba(167, 139, 250, 0.14); border-color: #ddd6fe; color: #5b21b6; }
-.rev-week strong, .rev-val, .rev-col.today .rev-day { color: #6d28d9; }
-.rev-day { color: #8a7fb0; }
-.rev-bar-wrap { background: #ede9fe; box-shadow: inset 0 1px 4px rgba(124, 58, 237, 0.12); }
-.rev-bar { background: linear-gradient(180deg, #c4b5fd, #8b5cf6); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35); }
-.rev-bar.empty { background: #ddd6fe; box-shadow: none; }
-.rev-col.today .rev-bar-wrap { box-shadow: 0 0 0 2px #8b5cf6, 0 0 14px rgba(139, 92, 246, 0.3); }
-.cal-head, .cal-day strong, .growth h3 { color: #4c1d95; }
-.cal-nav { background: #fff; border-color: #ddd6fe; color: #6d28d9; }
-.cal-nav:hover { background: #f1ecff; }
-.cal-day, .growth p { color: #8a7fb0; }
-.cal-day.today { background: linear-gradient(160deg, #a78bfa, #8b5cf6); color: #fff; box-shadow: 0 6px 14px rgba(139, 92, 246, 0.4); }
-.cal-day.today strong { color: #fff; }
-.cal-day.has strong::after { background: #8b5cf6; box-shadow: none; }
-.cal-day.today.has strong::after { background: #fff; }
-.ring { background: conic-gradient(#8b5cf6 calc(var(--pct) * 1%), #ddd6fe 0); filter: drop-shadow(0 4px 8px rgba(139, 92, 246, 0.3)); }
-.ring::before { background: #faf8ff; }
-.ring span { color: #6d28d9; }
+/* GOLD ACCENT (yellow-gold): action buttons, active tabs, "today" highlight */
+.main-btn { background: linear-gradient(135deg, #fde047, #eab308); color: #422006; box-shadow: 0 8px 20px rgba(234, 179, 8, 0.4); }
+.main-btn:hover { background: linear-gradient(135deg, #fef08a, #facc15); box-shadow: 0 12px 26px rgba(234, 179, 8, 0.5); }
+.tab.active { background: linear-gradient(135deg, #fde047, #eab308); color: #422006; box-shadow: 0 4px 12px rgba(234, 179, 8, 0.35); }
+.cal-day.today { background: linear-gradient(160deg, #fde047, #eab308); color: #422006; box-shadow: 0 6px 14px rgba(234, 179, 8, 0.4); }
+.cal-day.today strong { color: #422006; }
+.cal-day.today.has strong::after { background: #422006; }
+.rev-col.today .rev-day { color: #fde047; }
+.rev-col.today .rev-bar-wrap { box-shadow: 0 0 0 2px #facc15, 0 0 16px rgba(250, 204, 21, 0.45); }
+.section-title::before { background: linear-gradient(180deg, #fef08a, #eab308); }

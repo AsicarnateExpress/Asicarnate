@@ -1,10 +1,11 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
 
 import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  createUserWithEmailAndPassword
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 
 import {
@@ -13,6 +14,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  setDoc,
   collection
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
@@ -152,6 +154,8 @@ onAuthStateChanged(auth, async (user) => {
   $("welcome").textContent = "Signed in as " + (user.email || "admin");
   showScreen("dashboard");
   loadOrders();
+  loadRemittances();
+  loadDrivers();
 });
 
 
@@ -278,6 +282,7 @@ function render() {
   `;
 
   renderRevenue();
+  renderRemittances();
 
   const shown = adminOrders.filter((o) => {
     if (filter !== "all" && o.status !== filter) return false;
@@ -355,3 +360,265 @@ async function updateStatus(orderId, status, button) {
 $("adminFilter").addEventListener("change", render);
 $("adminSearch").addEventListener("input", render);
 $("adminRefresh").addEventListener("click", loadOrders);
+
+
+// ---------- Drivers: add / enable / disable ----------
+// Adds a "Drivers" panel to the dashboard (built here, no HTML change needed).
+let drivers = [];
+
+function ensureDriversPanel() {
+  if ($("driversPanel")) return;
+  const panel = document.createElement("details");
+  panel.id = "driversPanel";
+  panel.className = "gx-admin";
+  panel.innerHTML = `
+    <summary><strong>🚚 Drivers <span id="driverCount"></span></strong></summary>
+    <form id="driverForm" autocomplete="off">
+      <label for="drvName">Name</label>
+      <input id="drvName" required>
+      <label for="drvPhone">Phone</label>
+      <input id="drvPhone" inputmode="tel" required>
+      <label for="drvEmail">Email (driver login)</label>
+      <input id="drvEmail" type="email" required>
+      <label for="drvPass">Temporary password</label>
+      <input id="drvPass" type="text" minlength="6" required>
+      <button class="main-btn" id="drvBtn" type="submit">Add driver</button>
+    </form>
+    <div id="driverList"></div>`;
+  $("adminStats").insertAdjacentElement("beforebegin", panel);
+  $("driverForm").addEventListener("submit", addDriver);
+}
+
+async function loadDrivers() {
+  ensureDriversPanel();
+  try {
+    const snapshot = await getDocs(collection(db, "drivers"));
+    drivers = snapshot.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+    renderDrivers();
+  } catch (error) {
+    console.error("Load drivers error:", error);
+    $("driverList").innerHTML = `<p class="empty">Could not load drivers: ${escapeHtml(error.code || error.message)}</p>`;
+  }
+}
+
+function renderDrivers() {
+  $("driverCount").textContent = drivers.length ? `(${drivers.length})` : "";
+  $("driverList").innerHTML = drivers.length
+    ? drivers.map((d) => {
+        const off = d.active === false;
+        return `
+          <article class="booking-card ${off ? "cancelled" : ""}">
+            <div class="booking-top">
+              <h3>${escapeHtml(d.name)}</h3>
+              <span class="badge ${off ? "bad" : "ok"}">${off ? "Disabled" : "Active"}</span>
+            </div>
+            <p>${escapeHtml(d.phone)} · ${escapeHtml(d.email)}</p>
+            <div class="admin-actions">
+              <button type="button" class="ghost-btn small" data-driver-toggle="${d.id}">${off ? "Enable" : "Disable"}</button>
+            </div>
+          </article>`;
+      }).join("")
+    : `<p class="empty">No drivers yet.</p>`;
+
+  $("driverList").querySelectorAll("[data-driver-toggle]").forEach((btn) =>
+    btn.addEventListener("click", () => toggleDriver(btn.dataset.driverToggle, btn))
+  );
+}
+
+async function addDriver(event) {
+  event.preventDefault();
+  const name = $("drvName").value.trim();
+  const phone = $("drvPhone").value.trim();
+  const email = $("drvEmail").value.trim();
+  const pass = $("drvPass").value;
+  const btn = $("drvBtn");
+
+  btn.disabled = true;
+  btn.textContent = "Adding...";
+
+  // A separate Firebase app creates the login, so you stay signed in as admin.
+  const temp = initializeApp(firebaseConfig, "driver-create-" + Date.now());
+  try {
+    const cred = await createUserWithEmailAndPassword(getAuth(temp), email, pass);
+    await setDoc(doc(db, "drivers", cred.user.uid), {
+      name, phone, email, active: true, createdMs: Date.now()
+    });
+    showMessage(`Driver ${name} added. Give them the email and password to log in at driver.html.`, true);
+    $("driverForm").reset();
+    await loadDrivers();
+  } catch (error) {
+    console.error("Add driver error:", error);
+    showMessage(
+      error.code === "auth/email-already-in-use" ? "That email already has an account."
+      : error.code === "auth/weak-password" ? "Password must be at least 6 characters."
+      : error.code === "permission-denied" ? "Login created, but saving the driver was blocked. Update your Firestore rules (drivers: admin can write)."
+      : `Could not add driver: ${error.code || error.message}`
+    );
+  } finally {
+    await deleteApp(temp).catch(() => {});
+    btn.disabled = false;
+    btn.textContent = "Add driver";
+  }
+}
+
+async function toggleDriver(id, button) {
+  const d = drivers.find((x) => x.id === id);
+  if (!d) return;
+  const makeActive = d.active === false;
+  if (!makeActive && !confirm(`Disable ${d.name}? They will no longer be able to use the driver app.`)) return;
+
+  button.disabled = true;
+  try {
+    await updateDoc(doc(db, "drivers", id), { active: makeActive });
+    d.active = makeActive;
+    showMessage(`${d.name} is now ${makeActive ? "active" : "disabled"}.`, true);
+    renderDrivers();
+  } catch (error) {
+    console.error("Toggle driver error:", error);
+    showMessage("Could not update driver: " + (error.code || error.message));
+    button.disabled = false;
+  }
+}
+
+
+// ---------- Remittances: verify your drivers' GCash payments ----------
+// Must match PLATFORM_RATE in driver.js
+const PLATFORM_RATE = 0.20;
+const isCash = (o) => /cash/i.test(o.payment || "");
+const cutOf = (o) => Math.round((Number(o.total) || 0) * PLATFORM_RATE * 100) / 100;
+
+let remits = [];
+let remitFilter = "pending";
+
+function ensureRemitPanel() {
+  if ($("remitPanel")) return;
+  const panel = document.createElement("details");
+  panel.id = "remitPanel";
+  panel.className = "gx-admin";
+  panel.innerHTML = `
+    <summary><strong>💸 Driver remittances <span id="remitCount"></span></strong></summary>
+    <div class="gx-sum" id="remitSum"></div>
+    <div class="gx-info" id="remitOwed"></div>
+    <div class="gx-tabs" id="remitTabs">
+      <button type="button" data-rf="pending">Pending</button>
+      <button type="button" data-rf="confirmed">Confirmed</button>
+      <button type="button" data-rf="rejected">Rejected</button>
+      <button type="button" data-rf="all">All</button>
+    </div>
+    <div id="remitList"></div>`;
+  $("adminStats").insertAdjacentElement("beforebegin", panel);
+
+  $("remitTabs").querySelectorAll("[data-rf]").forEach((b) =>
+    b.addEventListener("click", () => { remitFilter = b.dataset.rf; renderRemittances(); })
+  );
+}
+
+async function loadRemittances() {
+  ensureRemitPanel();
+  try {
+    const snapshot = await getDocs(collection(db, "remittances"));
+    remits = snapshot.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
+    renderRemittances();
+  } catch (error) {
+    console.error("Load remittances error:", error);
+    $("remitList").innerHTML = `<p class="empty">Could not load remittances: ${escapeHtml(error.code || error.message)}</p>`;
+  }
+}
+
+function renderRemittances() {
+  ensureRemitPanel();
+
+  const total = (list) => list.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const by = (status) => remits.filter((r) => r.status === status);
+  const pending = by("pending");
+  $("remitCount").textContent = pending.length ? `(${pending.length} pending)` : "";
+
+  // Still owed: delivered cash orders not covered by a pending or confirmed remittance
+  const covered = new Set(remits.filter((r) => r.status !== "rejected").flatMap((r) => r.orderIds || []));
+  const owedOrders = adminOrders.filter((o) =>
+    o.status === "completed" && o.driverId && isCash(o) && !covered.has(o.id)
+  );
+  const owed = owedOrders.reduce((s, o) => s + cutOf(o), 0);
+
+  const perDriver = {};
+  owedOrders.forEach((o) => {
+    const key = o.driverName || o.driverId;
+    perDriver[key] = perDriver[key] || { amount: 0, count: 0 };
+    perDriver[key].amount += cutOf(o);
+    perDriver[key].count += 1;
+  });
+
+  $("remitSum").innerHTML = `
+    <div><strong>${money(owed)}</strong><span>Owed by drivers</span></div>
+    <div><strong>${money(total(pending))}</strong><span>To verify</span></div>
+    <div><strong>${money(total(by("confirmed")))}</strong><span>Confirmed</span></div>`;
+
+  $("remitOwed").innerHTML = Object.keys(perDriver).length
+    ? "<strong>Still owed:</strong><br>" + Object.entries(perDriver).map(([name, v]) =>
+        `${escapeHtml(name)}: ${money(v.amount)} (${v.count} order${v.count === 1 ? "" : "s"})`).join("<br>")
+    : "No driver owes you anything right now. ✅";
+
+  $("remitTabs").querySelectorAll("[data-rf]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.rf === remitFilter)
+  );
+
+  const shown = remitFilter === "all" ? remits : by(remitFilter);
+  const stamp = { pending: ["wait", "Pending"], confirmed: ["paid", "Confirmed"], rejected: ["bad", "Rejected"] };
+  const isDuplicate = (r) => remits.some((x) => x.id !== r.id && String(x.gcashRef) === String(r.gcashRef));
+
+  $("remitList").innerHTML = shown.length ? shown.map((r) => {
+    const [tone, text] = stamp[r.status] || ["wait", r.status];
+    return `
+      <article class="booking-card ${r.status === "rejected" ? "cancelled" : ""}">
+        <div class="booking-top">
+          <h3>${money(r.amount)} · ${escapeHtml(r.driverName)}</h3>
+          <span class="gx-stamp ${tone}">${text}</span>
+        </div>
+        <p><strong>GCash ref:</strong> ${escapeHtml(r.gcashRef)}</p>
+        ${isDuplicate(r) ? `<p style="color:#b91c1c"><strong>⚠ This reference number was used in another remittance.</strong></p>` : ""}
+        <p>Orders: ${escapeHtml((r.orderNos || []).join(", "))}</p>
+        <p class="hint">Submitted ${new Date(r.createdMs || 0).toLocaleString()}</p>
+        ${r.status === "pending" ? `
+          <p class="hint">Check your GCash transactions: same amount and same reference number.</p>
+          <div class="admin-actions">
+            <button type="button" class="main-btn small" data-remit-ok="${r.id}">Confirm</button>
+            <button type="button" class="ghost-btn small danger" data-remit-no="${r.id}">Reject</button>
+          </div>` : ""}
+      </article>`;
+  }).join("") : `<p class="empty">No ${remitFilter === "all" ? "" : remitFilter + " "}remittances.</p>`;
+
+  $("remitList").querySelectorAll("[data-remit-ok]").forEach((btn) =>
+    btn.addEventListener("click", () => setRemitStatus(btn.dataset.remitOk, "confirmed", btn)));
+  $("remitList").querySelectorAll("[data-remit-no]").forEach((btn) =>
+    btn.addEventListener("click", () => setRemitStatus(btn.dataset.remitNo, "rejected", btn)));
+}
+
+async function setRemitStatus(id, status, button) {
+  const r = remits.find((x) => x.id === id);
+  if (!r) return;
+
+  const ask = status === "confirmed"
+    ? `Confirm ${money(r.amount)} from ${r.driverName} (ref ${r.gcashRef})?\n\nOnly confirm if you see this payment in your GCash history.`
+    : `Reject this remittance from ${r.driverName}? They will have to submit it again.`;
+  if (!confirm(ask)) return;
+
+  button.disabled = true;
+  try {
+    await updateDoc(doc(db, "remittances", id), {
+      status,
+      [status === "confirmed" ? "confirmedMs" : "rejectedMs"]: Date.now(),
+      reviewedBy: auth.currentUser?.email || "admin"
+    });
+    r.status = status;
+    showMessage(`Remittance from ${r.driverName} ${status}.`, true);
+    renderRemittances();
+  } catch (error) {
+    console.error("Remittance update error:", error);
+    showMessage("Could not update: " + (error.code || error.message));
+    button.disabled = false;
+  }
+}

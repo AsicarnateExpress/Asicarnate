@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Driver</title>
+  <link rel="stylesheet" href="gab.css">
+  <link rel="stylesheet" href="gcash.css">
+</head>
+<body>
+  <div class="container" id="container">
+
+    <section id="loginBox">
+      <h1>Driver Login</h1>
+      <p class="subtitle">Sign in to take deliveries</p>
+      <form id="loginForm">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" autocomplete="username" required>
+        <label for="loginPass">Password</label>
+        <input id="loginPass" type="password" autocomplete="current-password" required>
+        <button class="main-btn" id="loginBtn" type="submit">Sign In</button>
+      </form>
+    </section>
+
+    <section id="app" hidden>
+      <h1>Driver</h1>
+      <p class="subtitle" id="welcome"></p>
+      <div class="stats" id="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="jobs" type="button">Jobs</button>
+        <button class="tab" data-tab="mine" type="button">My trips</button>
+        <button class="tab" data-tab="remit" type="button">Remit</button>
+      </div>
+      <div id="jobs"></div>
+      <div id="mine" hidden></div>
+      <div id="remit" hidden></div>
+      <div class="admin-actions">
+        <button class="ghost-btn small" id="refreshBtn" type="button">Refresh</button>
+        <button class="ghost-btn small" id="logoutBtn" type="button">Log out</button>
+      </div>
+    </section>
+
+    <p id="message"></p>
+  </div>
+  <script type="module" src="driver.js"></script>
+</body>
+</html>

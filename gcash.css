@@ -66,7 +66,7 @@
 
 /* ---------- admin: payments + remittance ---------- */
 .gx-admin { margin: 22px 0 6px; padding-top: 18px; border-top: 1px solid #ddd6fe; }
-.gx-admin h2 { margin: 0 0 12px; color: #4c1d95; font-size: 18px; }
+.gx-admin h2 { margin: 0 0 12px; color: #2e1065; font-size: 18px; }
 
 .gx-tabs {
   display: flex;
@@ -129,3 +129,8 @@
   .gx-print-modal .gx-noprint { display: none !important; }
   .gx-print-modal .modal-card { max-width: none; box-shadow: none; }
 }
+
+/* GOLD ACCENT (yellow-gold): GCash / remittance action buttons and active tabs */
+.gx-btn:not(.danger) { background: #facc15; color: #422006; }
+.gx-btn:not(.danger):hover { background: #eab308; }
+.gx-tabs button.active { background: linear-gradient(135deg, #fde047, #eab308); color: #422006; }
