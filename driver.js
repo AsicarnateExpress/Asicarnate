@@ -123,7 +123,7 @@ onAuthStateChanged(auth, async (user) => {
 
   driver = snap.data();
   msg("");
-  $("welcome").textContent = `Hi, ${driver.name || user.email}`;
+  $("welcome").textContent = `Hi, ${driver.name || user.email}` + (driver.vehicleName ? ` · ${VEHICLE_ICONS[driver.vehicleId] || ""} ${driver.vehicleName}` : "");
   show("app");
   loadAll();
 });
@@ -138,7 +138,7 @@ async function loadAll() {
       getDocs(query(collection(db, "remittances"), where("driverId", "==", me.uid)))
     ]);
     const rows = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() }));
-    openJobs  = rows(pend).filter((o) => !o.driverId).sort((a, b) => (a.createdMs || 0) - (b.createdMs || 0));
+    openJobs  = rows(pend).filter((o) => !o.driverId && (!driver.vehicleId || o.vehicleId === driver.vehicleId)).sort((a, b) => (a.createdMs || 0) - (b.createdMs || 0));
     myOrders  = rows(mine).sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
     remits    = rows(rem).sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
     render();
@@ -198,7 +198,7 @@ function render() {
 
   $("jobs").innerHTML = openJobs.length
     ? openJobs.map((o) => jobCard(o, false)).join("")
-    : `<p class="empty">No open jobs right now. Pull Refresh to check again.</p>`;
+    : `<p class="empty">No open jobs for your vehicle right now. Tap Refresh to check again.</p>`;
 
   const trips = [...active, ...myOrders.filter((o) => o.status !== "accepted" && o.status !== "ontheway")];
   $("mine").innerHTML = trips.length
@@ -332,5 +332,3 @@ document.addEventListener("click", (e) => {
   if (btn.dataset.act === "accept") acceptJob(btn.dataset.id, btn);
   if (btn.dataset.act === "advance") advance(btn.dataset.id, btn);
 });
-
-

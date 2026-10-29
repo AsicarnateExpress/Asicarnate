@@ -382,6 +382,7 @@ $("adminRefresh").addEventListener("click", loadOrders);
 // ---------- Drivers: add / enable / disable ----------
 // Adds a "Drivers" panel to the dashboard (built here, no HTML change needed).
 let drivers = [];
+const DRIVER_VEHICLES = { motorcycle: "Motorcycle", sedan: "Sedan", van: "L300 (Van)", truck: "Truck" };
 
 function ensureDriversPanel() {
   if ($("driversPanel")) return;
@@ -393,8 +394,16 @@ function ensureDriversPanel() {
     <form id="driverForm" autocomplete="off">
       <label for="drvName">Name</label>
       <input id="drvName" required>
-      <label for="drvPhone">Phone</label>
-      <input id="drvPhone" inputmode="tel" required>
+      <label for="drvPhone">Phone (11 digits)</label>
+      <input id="drvPhone" inputmode="numeric" pattern="[0-9]{11}" minlength="11" maxlength="11" placeholder="09171234567" required>
+      <label for="drvVehicle">Vehicle</label>
+      <select id="drvVehicle" required>
+        <option value="">Choose vehicle</option>
+        <option value="motorcycle">🏍️ Motorcycle</option>
+        <option value="sedan">🚗 Sedan</option>
+        <option value="van">🚐 L300 (Van)</option>
+        <option value="truck">🚚 Truck</option>
+      </select>
       <label for="drvEmail">Email (driver login)</label>
       <input id="drvEmail" type="email" required>
       <label for="drvPass">Temporary password</label>
@@ -404,6 +413,10 @@ function ensureDriversPanel() {
     <div id="driverList"></div>`;
   $("adminStats").insertAdjacentElement("beforebegin", panel);
   $("driverForm").addEventListener("submit", addDriver);
+  // Phone accepts digits only, max 11
+  $("drvPhone").addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 11);
+  });
 }
 
 async function loadDrivers() {
@@ -431,6 +444,7 @@ function renderDrivers() {
               <h3>${escapeHtml(d.name)}</h3>
               <span class="badge ${off ? "bad" : "ok"}">${off ? "Disabled" : "Active"}</span>
             </div>
+            <p>${VEHICLE_ICONS[d.vehicleId] || ""} ${escapeHtml(d.vehicleName || "No vehicle set")}</p>
             <p>${escapeHtml(d.phone)} · ${escapeHtml(d.email)}</p>
             <div class="admin-actions">
               <button type="button" class="ghost-btn small" data-driver-toggle="${d.id}">${off ? "Enable" : "Disable"}</button>
@@ -450,6 +464,17 @@ async function addDriver(event) {
   const phone = $("drvPhone").value.trim();
   const email = $("drvEmail").value.trim();
   const pass = $("drvPass").value;
+  const vehicleId = $("drvVehicle").value;
+
+  if (!/^\d{11}$/.test(phone)) {
+    showMessage("Phone number must be exactly 11 digits, like 09171234567.");
+    return;
+  }
+  if (!DRIVER_VEHICLES[vehicleId]) {
+    showMessage("Choose the driver's vehicle.");
+    return;
+  }
+
   const btn = $("drvBtn");
 
   btn.disabled = true;
@@ -460,7 +485,7 @@ async function addDriver(event) {
   try {
     const cred = await createUserWithEmailAndPassword(getAuth(temp), email, pass);
     await setDoc(doc(db, "drivers", cred.user.uid), {
-      name, phone, email, active: true, createdMs: Date.now()
+      name, phone, email, vehicleId, vehicleName: DRIVER_VEHICLES[vehicleId], active: true, createdMs: Date.now()
     });
     showMessage(`Driver ${name} added. Give them the email and password to log in at driver.html.`, true);
     $("driverForm").reset();
