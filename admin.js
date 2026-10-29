@@ -74,6 +74,23 @@ let adminOrders = [];
 let currentUid = null;
 
 
+// ---------- Branding ----------
+const BUSINESS_NAME = "AsicarnateExpress";
+document.title = `${BUSINESS_NAME} Admin`;
+
+function addBrand() {
+  ["loginBox", "dashboard"].forEach((id) => {
+    const box = $(id);
+    if (!box || box.querySelector(".brand-name")) return;
+    const html = `<p class="brand-name">🚚 ${escapeHtml(BUSINESS_NAME)}</p>`;
+    const heading = box.querySelector("h1");
+    if (heading) heading.insertAdjacentHTML("beforebegin", html);
+    else box.insertAdjacentHTML("afterbegin", html);
+  });
+}
+addBrand();
+
+
 // ---------- Login ----------
 $("togglePass").addEventListener("click", () => {
   const input = $("loginPass");

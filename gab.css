@@ -1409,3 +1409,6 @@ body {
 .rev-col.today .rev-day { color: #fde047; }
 .rev-col.today .rev-bar-wrap { box-shadow: 0 0 0 2px #facc15, 0 0 16px rgba(250, 204, 21, 0.45); }
 .section-title::before { background: linear-gradient(180deg, #fef08a, #eab308); }
+
+/* Business name shown above the page title */
+.brand-name { margin: 0 0 6px; text-align: center; font-size: 13px; font-weight: bold; letter-spacing: 0.14em; text-transform: uppercase; color: #6d28d9; }
