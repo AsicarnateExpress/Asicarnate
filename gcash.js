@@ -18,7 +18,7 @@
   /* ---------------- EDIT THESE ---------------- */
   var CONFIG = {
     gcashName:   'AsicarnateExpress',
-    gcashNumber: '09XXXXXXXXX',
+    gcashNumber: '0993 621 2745',
     qrImage:     'gcash-qr.png',     // put your GCash QR picture next to index.html
     commissionRate: 0.20,            // company share the driver remits from cash (20%)
     remitInstructions:

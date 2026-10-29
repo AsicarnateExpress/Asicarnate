@@ -51,7 +51,7 @@ const db = getFirestore(app);
 
 // ---------- Settings ----------
 const PLATFORM_RATE = 0.20;   // your cut of each order (20%). Driver keeps the rest.
-const ADMIN_GCASH = { name: "YOUR NAME", number: "09XX XXX XXXX" };   // where drivers send remittances
+const ADMIN_GCASH = { name: "AsicarnateExpress", number: "0993 621 2745" };   // where drivers send remittances
 
 // ---------- Helpers ----------
 const $ = (id) => document.getElementById(id);
