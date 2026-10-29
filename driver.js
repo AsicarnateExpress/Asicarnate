@@ -219,7 +219,7 @@ function renderRemit(due, dueAmount) {
       <p class="gx-amt">${money(dueAmount)}</p>
       <p class="hint">${due.length} cash order${due.length === 1 ? "" : "s"} · ${Math.round(PLATFORM_RATE * 100)}% platform share</p>
       <label for="remitRef">GCash reference no.</label>
-      <input id="remitRef" inputmode="numeric" placeholder="13-digit reference number" ${dueAmount > 0 ? "" : "disabled"}>
+      <input id="remitRef" inputmode="numeric" maxlength="13" placeholder="13-digit reference number" ${dueAmount > 0 ? "" : "disabled"}>
       <p class="hint">Send the exact amount in your GCash app first, then enter the reference number from the receipt.</p>
       <button type="button" class="main-btn" id="remitBtn" ${dueAmount > 0 ? "" : "disabled"}>
         ${dueAmount > 0 ? "Submit remittance" : "Nothing to remit"}
@@ -237,6 +237,10 @@ function renderRemit(due, dueAmount) {
     }).join("") : `<p class="empty">No remittances yet.</p>`}`;
 
   $("remitBtn")?.addEventListener("click", submitRemit);
+  // Reference number: digits only, max 13
+  $("remitRef")?.addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 13);
+  });
 }
 
 // ---------- Actions ----------
@@ -304,7 +308,7 @@ async function submitRemit() {
   const ref = $("remitRef").value.replace(/\s/g, "");
 
   if (!due.length || amount <= 0) return;
-  if (!/^\d{10,16}$/.test(ref)) { msg("Enter the GCash reference number (digits only)."); return; }
+  if (!/^\d{13}$/.test(ref)) { msg("The GCash reference number must be exactly 13 digits."); return; }
   if (!confirm(`Submit ${money(amount)} remittance with ref ${ref}?`)) return;
 
   const btn = $("remitBtn");

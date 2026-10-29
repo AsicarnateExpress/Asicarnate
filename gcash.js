@@ -154,6 +154,11 @@
       'Admin will verify it and mark your order as PAID.</p>';
     payment.insertAdjacentElement('afterend', panel);
 
+    // Reference number: digits only, max 13
+    panel.querySelector('#gxRef').addEventListener('input', function (e) {
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 13);
+    });
+
     var qr = panel.querySelector('#gxQr');
     qr.addEventListener('error', function () { qr.hidden = true; panel.querySelector('#gxNoQr').hidden = false; });
 
