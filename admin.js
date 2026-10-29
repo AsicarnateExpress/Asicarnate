@@ -352,6 +352,19 @@ function render() {
   );
 }
 
+// Keeps the public "slots" list in step with the order, so a completed or
+// cancelled order makes the vehicle available again for other customers.
+async function syncSlot(orderId, status) {
+  try {
+    await updateDoc(doc(db, "slots", orderId), {
+      status,
+      active: !["completed", "cancelled"].includes(status)
+    });
+  } catch (error) {
+    console.warn("Availability not updated:", error.code || error.message);
+  }
+}
+
 async function updateStatus(orderId, status, button) {
   const order = adminOrders.find((o) => o.id === orderId);
   if (!order || !STATUS[status] || order.status === status) return;
@@ -363,6 +376,7 @@ async function updateStatus(orderId, status, button) {
 
   try {
     await updateDoc(doc(db, "orders", orderId), { status });
+    await syncSlot(orderId, status);
     order.status = status;
     showMessage(`Order ${order.orderNo} is now "${STATUS[status][0]}".`, true);
     render();

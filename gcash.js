@@ -4,8 +4,11 @@
  *  1. GCash QR code shown when payment = GCash
  *  2. Receipt (resibo) after booking, plus "My receipts"
  *  3. GCash payment check: reference no. -> admin verifies -> PAID
- *  4. Driver remittance tracker (admin)
- *  5. Same date + time: a vehicle that is already taken cannot be booked
+ *  4. Driver remittance tracker (admin)  -- OFF by default, see CONFIG.adminPanels
+ *  5. Same date + time: a vehicle that is already taken cannot be booked.
+ *     Availability now comes from the live "slots" list that index.js loads
+ *     from Firebase (window.gxSlots). When an order is Completed or Cancelled
+ *     its slot is switched off, so the vehicle is available again.
  *
  *  Works on index.html (customer) and admin.html (admin) automatically.
  * ===================================================================== */
@@ -23,13 +26,14 @@
       'within 24 hours after the trip, then sends the GCash reference no. to admin.',
     slotHours: 2,                    // how long one booking blocks the vehicle
     defaultFleet: 1,                 // vehicles available per type
-    fleet: {}                        // e.g. { 'Motorcycle': 3, 'Van': 1 }  (key = vehicle name)
+    fleet: {},                       // e.g. { motorcycle: 3, van: 1 }  (key = vehicle id: motorcycle, sedan, van, truck)
+    adminPanels: false               // old browser-only GCash/remittance panels on admin.html (the new
+                                     // remittance panel in admin.js uses Firebase instead). Set true to show them.
   };
 
   /* ---------------- storage ----------------
-   * Uses this browser's localStorage so it works right now.
-   * To share between customer + admin devices, replace load()/save()
-   * with reads/writes to your database (see notes in the chat).      */
+   * Receipts only. Uses this browser's localStorage.
+   * (Availability no longer uses this. It comes from Firebase.)       */
   var KEY = 'gx_bookings_v1';
   var Store = {
     load: function () {
@@ -54,8 +58,8 @@
     return new Date(ts).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
   }
   function val(id) { var el = $(id); return el ? String(el.value || '').trim() : ''; }
-  function fleetSize(v) {
-    return CONFIG.fleet[v] != null ? CONFIG.fleet[v] : CONFIG.defaultFleet;
+  function fleetSize(vehicleId) {
+    return CONFIG.fleet[vehicleId] != null ? CONFIG.fleet[vehicleId] : CONFIG.defaultFleet;
   }
 
   /* ======================================================================
@@ -67,8 +71,17 @@
     var fareBox = $('fareSummary');
     if (!form || !payment || !fareBox) return;
 
+    function selectedCard() {
+      return document.querySelector('#vehicleList .vehicle-card.selected');
+    }
+
+    function selectedVehicleId() {
+      var c = selectedCard();
+      return c ? c.getAttribute('data-vehicle') : null;
+    }
+
     function selectedVehicle() {
-      var c = document.querySelector('#vehicleList .vehicle-card.selected');
+      var c = selectedCard();
       if (!c) return null;
       var k = c.cloneNode(true);
       [].forEach.call(k.querySelectorAll('.v-icon, small'), function (n) { n.remove(); });
@@ -91,16 +104,19 @@
       return m ? parseFloat(m[m.length - 1]) : 0;
     }
 
-    function takenCount(vehicle, start) {
+    /* Booked vehicles come from Firebase (window.gxSlots, set by index.js).
+     * Only active orders are in that list: Completed and Cancelled orders are not. */
+    function takenCount(vehicleId, start) {
+      var slots = window.gxSlots;
+      if (!Array.isArray(slots)) return 0; // not loaded yet
       var span = CONFIG.slotHours * 3600000;
-      return Store.load().filter(function (b) {
-        return b.vehicle === vehicle && b.status !== 'cancelled' && b.payStatus !== 'rejected' &&
-          Math.abs(b.start - start) < span;
+      return slots.filter(function (b) {
+        return b.vehicleId === vehicleId && b.active !== false && Math.abs(b.startMs - start) < span;
       }).length;
     }
 
-    function isAvailable(vehicle, start) {
-      return takenCount(vehicle, start) < fleetSize(vehicle);
+    function isAvailable(vehicleId, start) {
+      return takenCount(vehicleId, start) < fleetSize(vehicleId);
     }
 
     /* ---- availability banner ---- */
@@ -110,9 +126,9 @@
     fareBox.insertAdjacentElement('beforebegin', avail);
 
     function refreshAvail() {
-      var v = selectedVehicle(), s = startTime();
-      if (!v || s == null) { avail.className = 'gx-avail'; avail.textContent = ''; return; }
-      if (isAvailable(v, s)) {
+      var id = selectedVehicleId(), v = selectedVehicle(), s = startTime();
+      if (!id || !v || s == null) { avail.className = 'gx-avail'; avail.textContent = ''; return; }
+      if (isAvailable(id, s)) {
         avail.className = 'gx-avail ok';
         avail.textContent = '✅ ' + v + ' is available on ' + fmt(s) + '.';
       } else {
@@ -149,6 +165,7 @@
     function refreshAll() { refreshAvail(); refreshPanel(); }
 
     ['change', 'input', 'click'].forEach(function (ev) { document.addEventListener(ev, refreshAll); });
+    document.addEventListener('gx-slots', refreshAll); // live update when an order is completed / cancelled / booked
     new MutationObserver(refreshAll).observe(fareBox, { childList: true, subtree: true, characterData: true });
     var vl = $('vehicleList');
     if (vl) new MutationObserver(refreshAll).observe(vl, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
@@ -161,12 +178,12 @@
     }
 
     form.addEventListener('submit', function (e) {
-      var v = selectedVehicle(), s = startTime();
+      var id = selectedVehicleId(), v = selectedVehicle(), s = startTime();
       var isGcash = payment.value === 'GCash';
       var ref = val('gxRef').replace(/\s+/g, '');
       var error = '';
 
-      if (v && s != null && !isAvailable(v, s)) {
+      if (id && s != null && !isAvailable(id, s)) {
         error = v + ' is already booked on ' + fmt(s) + '. Please choose another time, date or vehicle.';
       } else if (isGcash && v) {
         if (!/^\d{13}$/.test(ref)) {
@@ -191,6 +208,7 @@
         id: 'GX' + Date.now().toString(36).toUpperCase(),
         created: Date.now(),
         vehicle: v,
+        vehicleId: id,
         start: s,
         pickup: val('dlPickup'),
         dropoff: val('dlDropoff'),
@@ -287,9 +305,10 @@
   }
 
   /* ======================================================================
-   *  ADMIN PAGE
+   *  ADMIN PAGE  (old browser-only panels, off by default)
    * ==================================================================== */
   function adminInit() {
+    if (!CONFIG.adminPanels) return;
     var logout = $('logoutBtn');
     if (!logout || !$('adminList')) return;
 

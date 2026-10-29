@@ -23,6 +23,7 @@ import {
   query,
   where,
   writeBatch,
+  onSnapshot,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
@@ -1003,6 +1004,7 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
   }
 
   const fare = calcFare(vehicle, km, helper, roundTrip);
+  const startMs = scheduledFor === "Now" ? Date.now() : new Date(scheduledFor.replace(" ", "T")).getTime();
   const orderRef = doc(collection(db, "orders"));
   const stamp = todayString().slice(2).replaceAll("-", "");
   const orderNo = `GB-${stamp}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1037,6 +1039,19 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
       createdMs: Date.now(),
       createdAt: serverTimestamp()
     });
+
+    // Public availability record (no personal details): marks this vehicle as booked at this time
+    try {
+      await setDoc(doc(db, "slots", orderRef.id), {
+        uid: currentUser.uid,
+        vehicleId: vehicle.id,
+        startMs,
+        status: "pending",
+        active: true
+      });
+    } catch (slotError) {
+      console.warn("Availability not saved:", slotError.code || slotError.message);
+    }
 
     getElement("orderForm").reset();
     resetDistanceStatus();
@@ -1128,6 +1143,13 @@ async function cancelOrder(orderId) {
     batch.update(doc(db, "orders", orderId), { status: "cancelled" });
     await batch.commit();
 
+    // Free the vehicle again
+    try {
+      await updateDoc(doc(db, "slots", orderId), { status: "cancelled", active: false });
+    } catch (slotError) {
+      console.warn("Availability not updated:", slotError.code || slotError.message);
+    }
+
     showMessage("Order cancelled.", true);
     loadOrders();
 
@@ -1158,12 +1180,31 @@ window.logout = async function () {
 // =====================================
 // 19. CHECK LOGIN STATUS
 // =====================================
+// Live list of booked vehicles. gcash.js reads window.gxSlots to show availability.
+// Completed and cancelled orders are not in this list, so those vehicles are free again.
+let stopSlots = null;
+
+function watchSlots() {
+  if (stopSlots) return;
+  stopSlots = onSnapshot(
+    query(collection(db, "slots"), where("active", "==", true)),
+    (snap) => {
+      window.gxSlots = snap.docs.map((d) => d.data());
+      document.dispatchEvent(new Event("gx-slots"));
+    },
+    (error) => console.warn("Availability not loaded:", error.code || error.message)
+  );
+}
+
 onAuthStateChanged(auth, (user) => {
   if (user) {
     showDashboard(user);
+    watchSlots();
   } else {
     currentUser = null;
     currentProfile = null;
+    if (stopSlots) { stopSlots(); stopSlots = null; }
+    window.gxSlots = null;
     showOnly("loginBox");
   }
 });

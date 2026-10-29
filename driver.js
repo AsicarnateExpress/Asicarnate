@@ -265,6 +265,19 @@ async function acceptJob(id, btn) {
   loadAll();
 }
 
+// Keeps the public "slots" list in step with the order, so a completed or
+// cancelled order makes the vehicle available again for other customers.
+async function syncSlot(orderId, status) {
+  try {
+    await updateDoc(doc(db, "slots", orderId), {
+      status,
+      active: !["completed", "cancelled"].includes(status)
+    });
+  } catch (error) {
+    console.warn("Availability not updated:", error.code || error.message);
+  }
+}
+
 async function advance(id, btn) {
   const order = myOrders.find((o) => o.id === id);
   const next = order && NEXT[order.status];
@@ -277,6 +290,7 @@ async function advance(id, btn) {
       status: next[0],
       ...(next[0] === "completed" ? { completedMs: Date.now() } : {})
     });
+    await syncSlot(id, next[0]);
     msg(`${order.orderNo} is now "${STATUS[next[0]][0]}".`, true);
   } catch (err) {
     msg(`Could not update: ${err.code || err.message}`);
