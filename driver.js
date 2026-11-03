@@ -90,6 +90,14 @@ let me = null, driver = null, tab = "jobs";
 let openJobs = [], myOrders = [], remits = [], payouts = [];
 
 // ---------- Login ----------
+// Show / hide password
+$("togglePass")?.addEventListener("click", () => {
+  const input = $("loginPass");
+  const hidden = input.type === "password";
+  input.type = hidden ? "text" : "password";
+  $("togglePass").textContent = hidden ? "Hide" : "Show";
+});
+
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   msg("");

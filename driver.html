@@ -31,7 +31,10 @@
         <label for="loginEmail">Email</label>
         <input id="loginEmail" type="email" autocomplete="username" required>
         <label for="loginPass">Password</label>
-        <input id="loginPass" type="password" autocomplete="current-password" required>
+        <div class="password-wrap">
+          <input id="loginPass" type="password" autocomplete="current-password" required>
+          <button type="button" class="toggle" id="togglePass">Show</button>
+        </div>
         <button class="main-btn" id="loginBtn" type="submit">Sign In</button>
       </form>
     </section>
@@ -72,6 +75,6 @@
     <p id="message"></p>
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script type="module" src="driver.js"></script>
+  <script type="module" src="driver.js?v=2"></script>
 </body>
 </html>
