@@ -990,6 +990,12 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
   if (km < 1 || km > MAX_KM) return fail(`Distance must be between 1 and ${MAX_KM} km. Tap Calculate distance.`);
   if (!item) return fail("Tell us what we're delivering.");
 
+  // GCash: the 13-digit reference no. is saved on the order so the admin can verify it
+  const gcashRef = payment === "GCash" ? (document.getElementById("gxRef")?.value || "").replace(/\s+/g, "") : "";
+  if (payment === "GCash" && !/^\d{13}$/.test(gcashRef)) {
+    return fail("Enter the 13-digit GCash reference no. after you pay.");
+  }
+
   let scheduledFor = "Now";
 
   if (when === "later") {
@@ -1013,7 +1019,8 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
   button.textContent = "Booking...";
 
   try {
-    await setDoc(orderRef, {
+    const batch = writeBatch(db);
+    batch.set(orderRef, {
       uid: currentUser.uid,
       orderNo,
       customerName: currentProfile?.fullName || currentUser.email,
@@ -1034,11 +1041,19 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
       helper,
       roundTrip,
       payment,
+      paymentStatus: payment === "GCash" ? "pending" : "cash",   // pending | verified | rejected | cash
+      gcashRef,
       total: fare.total,
       status: "pending",
       createdMs: Date.now(),
       createdAt: serverTimestamp()
     });
+
+    // A reference no. can only be used once: if it already exists, this whole booking is refused
+    if (payment === "GCash") {
+      batch.set(doc(db, "payrefs", gcashRef), { uid: currentUser.uid, orderId: orderRef.id, createdMs: Date.now() });
+    }
+    await batch.commit();
 
     // Public availability record (no personal details): marks this vehicle as booked at this time
     try {
@@ -1064,7 +1079,9 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
     console.error("Order error:", error);
 
     if (error.code === "permission-denied") {
-      fail("Permission denied. Publish the rules in firestore.rules in your Firebase Console (Firestore Database → Rules).");
+      fail(payment === "GCash"
+        ? "That GCash reference no. was already used for another order (or the Firebase rules are not published yet). Check the 13 digits."
+        : "Permission denied. Publish the rules in firestore.rules in your Firebase Console (Firestore Database → Rules).");
     } else {
       fail(error.message || "Could not place your order. Try again.");
     }
@@ -1079,6 +1096,13 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
 // =====================================
 // 16. MY ORDERS + CANCEL
 // =====================================
+function payStamp(o) {
+  if (!o.gcashRef && !o.paymentStatus) return "";
+  if (o.paymentStatus === "verified") return `<div class="gx-stamp paid">✔ PAID — GCash verified</div>`;
+  if (o.paymentStatus === "rejected") return `<div class="gx-stamp bad">✖ GCash payment rejected — contact us</div>`;
+  return `<div class="gx-stamp wait">⏳ GCash payment awaiting verification</div>`;
+}
+
 async function loadOrders() {
   const list = getElement("orderList");
   if (!list || !currentUser) return;
@@ -1115,6 +1139,7 @@ async function loadOrders() {
           <p>📦 ${escapeHtml(o.item)}</p>
           <p>🕒 ${escapeHtml(o.scheduledFor)}${o.helper ? " · helper" : ""}${o.roundTrip ? " · round trip" : ""}</p>
           <p class="price">Total: ${money(o.total)} · ${escapeHtml(o.payment)}</p>
+          ${o.payment === "GCash" ? payStamp(o) : ""}
           ${o.status === "pending"
             ? `<button type="button" class="ghost-btn small danger" data-cancel-order="${o.id}">Cancel order</button>`
             : ""}

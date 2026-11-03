@@ -170,6 +170,7 @@ onAuthStateChanged(auth, async (user) => {
   showMessage("");
   $("welcome").textContent = "Signed in as " + (user.email || "admin");
   showScreen("dashboard");
+  ensurePayPanel();
   loadOrders();
   loadRemittances();
   loadDrivers();
@@ -300,6 +301,7 @@ function render() {
 
   renderRevenue();
   renderRemittances();
+  renderPayments();
 
   const shown = adminOrders.filter((o) => {
     if (filter !== "all" && o.status !== filter) return false;
@@ -675,6 +677,110 @@ async function setRemitStatus(id, status, button) {
     renderRemittances();
   } catch (error) {
     console.error("Remittance update error:", error);
+    showMessage("Could not update: " + (error.code || error.message));
+    button.disabled = false;
+  }
+}
+
+
+// ---------- GCash payments: verify the reference no. your customers typed ----------
+let payFilter = "pending";
+
+function ensurePayPanel() {
+  if ($("payPanel")) return;
+  const panel = document.createElement("details");
+  panel.id = "payPanel";
+  panel.className = "gx-admin";
+  panel.innerHTML = `
+    <summary><strong>💳 GCash payments <span id="payCount"></span></strong></summary>
+    <div class="gx-sum" id="paySum"></div>
+    <div class="gx-info">Open your GCash app, find the payment in your history, and check that the
+      <b>amount</b> and the <b>13-digit reference no.</b> match. Then press Verify paid.</div>
+    <div class="gx-tabs" id="payTabs">
+      <button type="button" data-pf="pending">To verify</button>
+      <button type="button" data-pf="verified">Verified</button>
+      <button type="button" data-pf="rejected">Rejected</button>
+      <button type="button" data-pf="all">All</button>
+    </div>
+    <div id="payList"></div>`;
+  $("adminStats").insertAdjacentElement("beforebegin", panel);
+
+  $("payTabs").querySelectorAll("[data-pf]").forEach((b) =>
+    b.addEventListener("click", () => { payFilter = b.dataset.pf; renderPayments(); })
+  );
+}
+
+function renderPayments() {
+  ensurePayPanel();
+
+  const payStatusOf = (o) => o.paymentStatus || "pending";
+  const gcash = adminOrders.filter((o) => o.payment === "GCash" && o.gcashRef);
+  const by = (s) => gcash.filter((o) => payStatusOf(o) === s);
+  const verified = by("verified");
+  const received = verified.reduce((s, o) => s + (Number(o.total) || 0), 0);
+
+  $("payCount").textContent = by("pending").length ? `(${by("pending").length} to verify)` : "";
+  $("paySum").innerHTML = `
+    <div><strong>${by("pending").length}</strong><span>To verify</span></div>
+    <div><strong>${verified.length}</strong><span>Verified</span></div>
+    <div><strong>${money(received)}</strong><span>GCash received</span></div>`;
+
+  $("payTabs").querySelectorAll("[data-pf]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.pf === payFilter)
+  );
+
+  const shown = payFilter === "all" ? gcash : by(payFilter);
+  const stamp = { pending: ["wait", "To verify"], verified: ["paid", "Verified"], rejected: ["bad", "Rejected"] };
+  const dup = (o) => gcash.some((x) => x.id !== o.id && x.gcashRef === o.gcashRef);
+
+  $("payList").innerHTML = shown.length ? shown.map((o) => {
+    const status = payStatusOf(o);
+    const [tone, text] = stamp[status];
+    return `
+      <article class="booking-card ${status === "rejected" ? "cancelled" : ""}">
+        <div class="booking-top">
+          <h3>${escapeHtml(o.orderNo)}</h3>
+          <span class="gx-stamp ${tone}">${text}</span>
+        </div>
+        <p><strong>${escapeHtml(o.customerName)}</strong> · ${escapeHtml(o.phone)}</p>
+        <p class="price">${money(o.total)} <span>· Ref ${escapeHtml(o.gcashRef)}</span></p>
+        ${dup(o) ? `<p style="color:#b91c1c"><strong>⚠ This reference number was used in another order.</strong></p>` : ""}
+        ${o.status === "cancelled" ? `<p style="color:#b91c1c"><strong>⚠ This order was cancelled. Refund the customer if they paid.</strong></p>` : ""}
+        ${status === "pending" ? `
+          <div class="gx-actions">
+            <button type="button" class="gx-btn" data-pay-ok="${o.id}">Verify paid</button>
+            <button type="button" class="gx-btn danger" data-pay-no="${o.id}">Reject</button>
+          </div>` : ""}
+      </article>`;
+  }).join("") : `<p class="empty">No ${payFilter === "all" ? "" : payFilter + " "}GCash payments.</p>`;
+
+  $("payList").querySelectorAll("[data-pay-ok]").forEach((btn) =>
+    btn.addEventListener("click", () => setPayStatus(btn.dataset.payOk, "verified", btn)));
+  $("payList").querySelectorAll("[data-pay-no]").forEach((btn) =>
+    btn.addEventListener("click", () => setPayStatus(btn.dataset.payNo, "rejected", btn)));
+}
+
+async function setPayStatus(id, status, button) {
+  const o = adminOrders.find((x) => x.id === id);
+  if (!o) return;
+
+  const ask = status === "verified"
+    ? `Verify ${money(o.total)} from ${o.customerName} (ref ${o.gcashRef})?\n\nOnly press OK if you see this payment in your GCash history.`
+    : `Reject the GCash payment for ${o.orderNo}? The customer will see it as rejected.`;
+  if (!confirm(ask)) return;
+
+  button.disabled = true;
+  try {
+    await updateDoc(doc(db, "orders", id), {
+      paymentStatus: status,
+      paymentReviewedMs: Date.now(),
+      paymentReviewedBy: auth.currentUser?.email || "admin"
+    });
+    o.paymentStatus = status;
+    showMessage(`${o.orderNo}: payment ${status}.`, true);
+    renderPayments();
+  } catch (error) {
+    console.error("Payment update error:", error);
     showMessage("Could not update: " + (error.code || error.message));
     button.disabled = false;
   }
