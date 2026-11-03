@@ -551,6 +551,34 @@ const cutOf = (o) => Math.round((Number(o.total) || 0) * PLATFORM_RATE * 100) / 
 let remits = [];
 let remitFilter = "pending";
 
+// Re-checks a remittance against the real orders (never trust the amount the driver's phone sent)
+const peso2 = (n) => `₱${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function checkRemit(r) {
+  if (!adminOrders.length) return { expected: null, warnings: [] };   // orders not loaded yet
+  const warnings = [];
+  let expected = 0;
+
+  (r.orderIds || []).forEach((id) => {
+    const o = adminOrders.find((x) => x.id === id);
+    const label = (o && o.orderNo) || id;
+    if (!o) { warnings.push(`Order ${label} was not found.`); return; }
+    if (o.driverId !== r.driverId) warnings.push(`Order ${label} belongs to a different driver.`);
+    if (o.status !== "completed" || !isCash(o)) warnings.push(`Order ${label} is not a completed cash order.`);
+    if (o.remitId && o.remitId !== r.id) warnings.push(`Order ${label} is linked to another remittance.`);
+    if (remits.some((x) => x.id !== r.id && x.status !== "rejected" && (x.orderIds || []).includes(id))) {
+      warnings.push(`Order ${label} is also inside another remittance (double count).`);
+    }
+    expected += cutOf(o);
+  });
+
+  expected = Math.round(expected * 100) / 100;
+  if (Math.abs(expected - (Number(r.amount) || 0)) > 0.01) {
+    warnings.unshift(`Amount mismatch: driver sent ${peso2(r.amount)} but the orders add up to ${peso2(expected)}.`);
+  }
+  return { expected, warnings };
+}
+
 function ensureRemitPanel() {
   if ($("remitPanel")) return;
   const panel = document.createElement("details");
@@ -631,6 +659,7 @@ function renderRemittances() {
 
   $("remitList").innerHTML = shown.length ? shown.map((r) => {
     const [tone, text] = stamp[r.status] || ["wait", r.status];
+    const check = r.status === "pending" ? checkRemit(r) : { expected: null, warnings: [] };
     return `
       <article class="booking-card ${r.status === "rejected" ? "cancelled" : ""}">
         <div class="booking-top">
@@ -640,6 +669,9 @@ function renderRemittances() {
         <p><strong>GCash ref:</strong> ${escapeHtml(r.gcashRef)}</p>
         ${isDuplicate(r) ? `<p style="color:#b91c1c"><strong>⚠ This reference number was used in another remittance.</strong></p>` : ""}
         <p>Orders: ${escapeHtml((r.orderNos || []).join(", "))}</p>
+        ${r.status === "pending" && check.expected !== null ? (check.warnings.length
+          ? `<p style="color:#b91c1c"><strong>⚠ Check before confirming:</strong><br>${check.warnings.map(escapeHtml).join("<br>")}</p>`
+          : `<p style="color:#21834b">✔ Amount matches the orders (${peso2(check.expected)}).</p>`) : ""}
         <p class="hint">Submitted ${new Date(r.createdMs || 0).toLocaleString()}</p>
         ${r.status === "pending" ? `
           <p class="hint">Check your GCash transactions: same amount and same reference number.</p>
@@ -660,8 +692,11 @@ async function setRemitStatus(id, status, button) {
   const r = remits.find((x) => x.id === id);
   if (!r) return;
 
+  const problems = status === "confirmed" ? checkRemit(r).warnings : [];
   const ask = status === "confirmed"
-    ? `Confirm ${money(r.amount)} from ${r.driverName} (ref ${r.gcashRef})?\n\nOnly confirm if you see this payment in your GCash history.`
+    ? (problems.length
+        ? `WARNING - this remittance has problems:\n\n• ${problems.join("\n• ")}\n\nConfirm ${peso2(r.amount)} from ${r.driverName} anyway?`
+        : `Confirm ${peso2(r.amount)} from ${r.driverName} (ref ${r.gcashRef})?\n\nOnly confirm if you see this payment in your GCash history.`)
     : `Reject this remittance from ${r.driverName}? They will have to submit it again.`;
   if (!confirm(ask)) return;
 

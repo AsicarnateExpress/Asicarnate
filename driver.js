@@ -109,7 +109,7 @@ $("logoutBtn").addEventListener("click", async () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) { me = null; driver = null; show("login"); return; }
+  if (!user) { me = null; driver = null; closeMap(); show("login"); return; }
   me = user;
 
   let snap = null;
@@ -179,6 +179,7 @@ function jobCard(o, mine) {
       ${isCash(o) && o.status !== "completed" && o.status !== "cancelled"
         ? `<p class="hint">💵 Collect ${money(o.total)} cash from the customer.</p>` : ""}
       <div class="admin-actions">
+        <button type="button" class="ghost-btn small" data-act="map" data-id="${o.id}">📍 View on map</button>
         ${!mine ? `<button type="button" class="main-btn small" data-act="accept" data-id="${o.id}">Accept job</button>` : ""}
         ${mine && next ? `<button type="button" class="main-btn small" data-act="advance" data-id="${o.id}">${next[1]}</button>` : ""}
       </div>
@@ -313,9 +314,24 @@ async function submitRemit() {
 
   const btn = $("remitBtn");
   btn.disabled = true; btn.textContent = "Submitting...";
+
+  // Duplicate check: a GCash reference number can only be used once
+  const refDoc = doc(db, "remitrefs", ref);
+  try {
+    if ((await getDoc(refDoc)).exists()) {
+      msg("This GCash reference number was already used. Enter the reference from your latest payment.");
+      btn.disabled = false; btn.textContent = "Submit remittance";
+      return;
+    }
+  } catch (err) {
+    console.warn("Reference pre-check skipped:", err.code || err.message);   // the write below still enforces it
+  }
+
   try {
     const batch = writeBatch(db);
     const rRef = doc(collection(db, "remittances"));
+    // Reserves the reference number. If it already exists, the whole batch is refused.
+    batch.set(refDoc, { driverId: me.uid, remitId: rRef.id, createdMs: Date.now() });
     batch.set(rRef, {
       driverId: me.uid,
       driverName: driver.name || me.email,
@@ -330,7 +346,9 @@ async function submitRemit() {
     await batch.commit();
     msg("Remittance submitted. The admin will confirm it.", true);
   } catch (err) {
-    msg(`Could not submit: ${err.code || err.message}`);
+    msg(err.code === "permission-denied"
+      ? "Could not submit. This reference number may already be used. Check it and try again."
+      : `Could not submit: ${err.code || err.message}`);
   }
   loadAll();
 }
@@ -350,4 +368,202 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   if (btn.dataset.act === "accept") acceptJob(btn.dataset.id, btn);
   if (btn.dataset.act === "advance") advance(btn.dataset.id, btn);
+  if (btn.dataset.act === "map") showMap(btn.dataset.id);
+});
+
+
+/* =========================================================
+   MAP  -  shows the client's pin-point (pick-up), the drop-off
+   and the driver's own live location.
+   Free OpenStreetMap services, no API key:
+   Leaflet (map) + Nominatim (address -> pin) + OSRM (route)
+========================================================= */
+const GEO_COUNTRY_CODE = "ph";          // "" = worldwide
+const MAP_CENTER = [11.45, 123.15];     // same start area as the customer page
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+let map = null, mapLayer = null, meMarker = null, watchId = null;
+let myPos = null, lastRoutePos = null, mapToken = 0, mapOrder = null, mapPoints = {};
+const geoCache = new Map();
+let lastGeocode = 0;
+
+const pinIcon = (emoji) => L.divIcon({
+  className: "emoji-pin", html: emoji, iconSize: [30, 30], iconAnchor: [15, 28], popupAnchor: [0, -26]
+});
+
+function initDriverMap() {
+  if (map) { map.invalidateSize(); return true; }
+  if (typeof L === "undefined") { msg("The map could not load. Check your internet connection."); return false; }
+  map = L.map("driverMap").setView(MAP_CENTER, 11);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+  mapLayer = L.layerGroup().addTo(map);
+  setTimeout(() => map.invalidateSize(), 200);
+  return true;
+}
+
+// Find a pin for an address. Uses saved coordinates if the order has them,
+// otherwise searches the address (trying shorter versions if needed).
+async function geocodeOnce(q) {
+  const gap = Date.now() - lastGeocode;
+  if (gap < 1100) await wait(1100 - gap);      // free service: max 1 request / second
+  lastGeocode = Date.now();
+  const params = new URLSearchParams({ format: "json", limit: "1", q });
+  if (GEO_COUNTRY_CODE) params.set("countrycodes", GEO_COUNTRY_CODE);
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error("Address search failed");
+  const found = await res.json();
+  return found.length ? { lat: parseFloat(found[0].lat), lon: parseFloat(found[0].lon) } : null;
+}
+
+async function locate(order, kind) {
+  const lat = Number(order[`${kind}Lat`]), lon = Number(order[`${kind}Lon`]);
+  if (Number.isFinite(lat) && Number.isFinite(lon) && order[`${kind}Lat`] != null) return { lat, lon, exact: true };
+
+  const text = String(order[kind] || "").trim();
+  if (!text) return null;
+  if (geoCache.has(text)) return geoCache.get(text);
+
+  const parts = text.split(",").map((p) => p.trim()).filter(Boolean);
+  let point = null;
+  try {
+    for (let i = 0; i < Math.min(parts.length, 3) && !point; i++) {
+      point = await geocodeOnce(parts.slice(i).join(", "));
+      if (point && i > 0) point.exact = false;   // only the wider area was found
+    }
+  } catch (err) { console.error("Geocode error:", err); }
+  geoCache.set(text, point);
+  return point;
+}
+
+async function getRoute(a, b) {
+  try {
+    const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`);
+    const d = await r.json();
+    if (d.code === "Ok" && d.routes?.[0]) return d.routes[0];
+  } catch (err) { console.error("Route error:", err); }
+  return null;
+}
+
+function setMapInfo(html) { $("mapInfo").innerHTML = html; }
+
+async function showMap(id) {
+  const order = [...myOrders, ...openJobs].find((o) => o.id === id);
+  if (!order) return;
+  if (!initDriverMap()) return;
+
+  mapOrder = order;
+  mapPoints = {};
+  const token = ++mapToken;
+  $("mapPanel").hidden = false;
+  $("mapTitle").textContent = `${order.orderNo} · client location`;
+  $("mapNavBtn").hidden = true;
+  mapLayer.clearLayers();
+  meMarker = null; lastRoutePos = null;
+  setMapInfo("Finding the client's pin-point…");
+  $("mapPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => map.invalidateSize(), 250);
+
+  const pickup = await locate(order, "pickup");
+  if (token !== mapToken) return;
+  if (pickup) {
+    mapPoints.pickup = pickup;
+    L.marker([pickup.lat, pickup.lon], { icon: pinIcon("📍") }).addTo(mapLayer)
+      .bindPopup(`<strong>Client pick-up</strong><br>${escapeHtml(order.pickup)}<br>${escapeHtml(order.customerName || "")}`);
+    map.setView([pickup.lat, pickup.lon], 16);
+    $("mapNavBtn").href = `https://www.google.com/maps/dir/?api=1&destination=${pickup.lat},${pickup.lon}&travelmode=driving`;
+    $("mapNavBtn").hidden = false;
+    setMapInfo(pickup.exact === false
+      ? "Exact house not found — pin shows the nearest area. Call the customer to confirm."
+      : "Client pick-up found.");
+  } else {
+    setMapInfo("Could not find the pick-up address on the map. Call the customer to confirm.");
+  }
+
+  const dropoff = await locate(order, "dropoff");
+  if (token !== mapToken) return;
+  if (dropoff) {
+    mapPoints.dropoff = dropoff;
+    L.marker([dropoff.lat, dropoff.lon], { icon: pinIcon("🏁") }).addTo(mapLayer)
+      .bindPopup(`<strong>Drop-off</strong><br>${escapeHtml(order.dropoff)}`);
+  }
+
+  startTracking();          // shows the driver's own position + route
+  if (myPos) drawRoutes(token);
+  else fitAll();
+}
+
+function fitAll() {
+  const pts = [mapPoints.pickup, mapPoints.dropoff, myPos].filter(Boolean).map((p) => [p.lat, p.lon]);
+  if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40] });
+  else if (pts.length === 1) map.setView(pts[0], 16);
+}
+
+async function drawRoutes(token = mapToken) {
+  if (!map || !mapOrder) return;
+  mapLayer.eachLayer((l) => { if (l instanceof L.Polyline) mapLayer.removeLayer(l); });
+  const info = [];
+
+  if (myPos && mapPoints.pickup) {
+    const r = await getRoute(myPos, mapPoints.pickup);
+    if (token !== mapToken) return;
+    if (r) {
+      L.geoJSON(r.geometry, { style: { color: "#7c3aed", weight: 5 } }).addTo(mapLayer);
+      info.push(`🛵 You → client: <strong>${(r.distance / 1000).toFixed(1)} km</strong> · about ${Math.max(1, Math.round(r.duration / 60))} min`);
+    }
+    lastRoutePos = { ...myPos };
+  }
+  if (mapPoints.pickup && mapPoints.dropoff) {
+    const r = await getRoute(mapPoints.pickup, mapPoints.dropoff);
+    if (token !== mapToken) return;
+    if (r) {
+      L.geoJSON(r.geometry, { style: { color: "#0ea5e9", weight: 4, dashArray: "8 8" } }).addTo(mapLayer);
+      info.push(`📍 Client → drop-off: <strong>${(r.distance / 1000).toFixed(1)} km</strong>`);
+    }
+  }
+  if (info.length) setMapInfo(info.join("<br>"));
+  fitAll();
+}
+
+// Driver's live GPS position
+function startTracking() {
+  if (watchId !== null) return;
+  if (!navigator.geolocation) { setMapInfo("Your device has no GPS, so only the client's pin is shown."); return; }
+  watchId = navigator.geolocation.watchPosition((pos) => {
+    myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    if (!map) return;
+    if (!meMarker) {
+      meMarker = L.marker([myPos.lat, myPos.lon], { icon: pinIcon("🛵"), zIndexOffset: 1000 }).addTo(mapLayer).bindPopup("You are here");
+    } else {
+      meMarker.setLatLng([myPos.lat, myPos.lon]);
+    }
+    // Draw the route the first time, and again after moving more than ~200 m
+    const moved = lastRoutePos ? map.distance([lastRoutePos.lat, lastRoutePos.lon], [myPos.lat, myPos.lon]) : Infinity;
+    if (!$("mapPanel").hidden && moved > 200) drawRoutes();
+  }, (err) => {
+    console.warn("GPS:", err.message);
+    setMapInfo("Turn on location permission to see your position and the route to the client.");
+  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+}
+
+function stopTracking() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null; myPos = null; lastRoutePos = null;
+}
+
+function closeMap() {
+  mapToken++;
+  stopTracking();
+  mapOrder = null;
+  $("mapPanel").hidden = true;
+  mapLayer?.clearLayers();
+  meMarker = null;
+}
+
+$("mapCloseBtn").addEventListener("click", closeMap);
+$("mapLocateBtn").addEventListener("click", () => {
+  if (!map) return;
+  if (myPos) { map.setView([myPos.lat, myPos.lon], 16); meMarker?.openPopup(); }
+  else { startTracking(); setMapInfo("Getting your location…"); }
 });
