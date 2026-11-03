@@ -1009,6 +1009,12 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
     scheduledFor = `${date} ${time}`;
   }
 
+  // Exact map pins (if the customer's pin matches the typed address), so the driver's
+  // navigation goes to the exact spot instead of searching the address text again.
+  const pinOf = (point, text) => (point && point.text === text) ? { lat: point.lat, lon: point.lon } : null;
+  const pickPin = pinOf(pickupPoint, pickup);
+  const dropPin = pinOf(dropoffPoint, dropoff);
+
   const fare = calcFare(vehicle, km, helper, roundTrip);
   const startMs = scheduledFor === "Now" ? Date.now() : new Date(scheduledFor.replace(" ", "T")).getTime();
   const orderRef = doc(collection(db, "orders"));
@@ -1030,6 +1036,10 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
       vehicleName: vehicle.name,
       pickup,
       dropoff,
+      pickupLat: pickPin ? pickPin.lat : null,
+      pickupLon: pickPin ? pickPin.lon : null,
+      dropoffLat: dropPin ? dropPin.lat : null,
+      dropoffLon: dropPin ? dropPin.lon : null,
       receiver,
       receiverPhone,
       item,

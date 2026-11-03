@@ -87,7 +87,7 @@ function show(name) {
 
 // ---------- State ----------
 let me = null, driver = null, tab = "jobs";
-let openJobs = [], myOrders = [], remits = [];
+let openJobs = [], myOrders = [], remits = [], payouts = [];
 
 // ---------- Login ----------
 $("loginForm").addEventListener("submit", async (e) => {
@@ -133,15 +133,18 @@ onAuthStateChanged(auth, async (user) => {
 async function loadAll() {
   $("jobs").innerHTML = `<p class="empty">Loading...</p>`;
   try {
-    const [pend, mine, rem] = await Promise.all([
+    const [pend, mine, rem, pay] = await Promise.all([
       getDocs(query(collection(db, "orders"), where("status", "==", "pending"))),
       getDocs(query(collection(db, "orders"), where("driverId", "==", me.uid))),
-      getDocs(query(collection(db, "remittances"), where("driverId", "==", me.uid)))
+      getDocs(query(collection(db, "remittances"), where("driverId", "==", me.uid))),
+      // payouts need the new "payouts" rule; if it is not published yet, just show none
+      getDocs(query(collection(db, "payouts"), where("driverId", "==", me.uid))).catch(() => ({ docs: [] }))
     ]);
     const rows = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() }));
     openJobs  = rows(pend).filter((o) => !o.driverId && (!driver.vehicleId || o.vehicleId === driver.vehicleId)).sort((a, b) => (a.createdMs || 0) - (b.createdMs || 0));
     myOrders  = rows(mine).sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
     remits    = rows(rem).sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
+    payouts   = rows(pay).sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
     render();
   } catch (err) {
     console.error("Load error:", err);
@@ -155,6 +158,12 @@ function dueOrders() {
   return myOrders.filter((o) =>
     o.status === "completed" && isCash(o) && (!o.remitId || status[o.remitId] === "rejected")
   );
+}
+
+// GCash orders: the customer paid the admin, so the admin owes the driver their share ("cash out").
+const isGcash = (o) => /^\s*gcash\b/i.test(o.payment || "");
+function pendingPayoutOrders() {
+  return myOrders.filter((o) => o.status === "completed" && isGcash(o) && o.paymentStatus === "verified" && !o.payoutId);
 }
 
 // ---------- Render ----------
@@ -212,7 +221,19 @@ function render() {
 
 function renderRemit(due, dueAmount) {
   const stamp = { pending: ["wait", "Waiting for admin"], confirmed: ["paid", "Confirmed"], rejected: ["bad", "Rejected"] };
+  const payOrders = pendingPayoutOrders();
+  const toReceive = round2(payOrders.reduce((s, o) => s + share(o), 0));
+  const received = round2(payouts.reduce((s, p) => s + (Number(p.amount) || 0), 0));
   $("remit").innerHTML = `
+    <div class="gx-pay">
+      <p class="gx-name">Your cash-out (GCash orders)</p>
+      <p class="gx-amt">${money(toReceive)}</p>
+      <p class="hint">${payOrders.length} verified GCash order${payOrders.length === 1 ? "" : "s"} waiting. The customer paid the admin,
+        so the admin sends your ${Math.round((1 - PLATFORM_RATE) * 100)}% share to your GCash (${escapeHtml(driver.phone || "your number")}).
+        Total received so far: ${money(received)}.</p>
+      ${payouts.length ? payouts.map((p) => `
+        <p class="hint">✔ ${money(p.amount)} · Ref ${escapeHtml(p.gcashRef)} · ${new Date(p.createdMs || 0).toLocaleDateString()}</p>`).join("") : ""}
+    </div>
     <div class="gx-pay">
       <p class="gx-name">Send your remittance by GCash</p>
       <p class="gx-name">${escapeHtml(ADMIN_GCASH.name)}</p>
@@ -448,6 +469,23 @@ async function getRoute(a, b) {
 
 function setMapInfo(html) { $("mapInfo").innerHTML = html; }
 
+// Google Maps links. Uses the exact pin when we have one, otherwise the address text,
+// and the driver's live GPS position as the starting point when known.
+function navUrl(point, text) {
+  const dest = point ? `${point.lat},${point.lon}` : String(text || "").trim();
+  if (!dest) return null;
+  let url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+  if (myPos) url += `&origin=${myPos.lat},${myPos.lon}`;
+  return url;
+}
+
+function updateNavLinks() {
+  if (!mapOrder) return;
+  const set = (id, url) => { const a = $(id); if (!a) return; a.hidden = !url; if (url) a.href = url; };
+  set("mapNavBtn", navUrl(mapPoints.pickup, mapOrder.pickup));
+  set("mapNavDropBtn", navUrl(mapPoints.dropoff, mapOrder.dropoff));
+}
+
 async function showMap(id) {
   const order = [...myOrders, ...openJobs].find((o) => o.id === id);
   if (!order) return;
@@ -472,14 +510,13 @@ async function showMap(id) {
     L.marker([pickup.lat, pickup.lon], { icon: pinIcon("📍") }).addTo(mapLayer)
       .bindPopup(`<strong>Client pick-up</strong><br>${escapeHtml(order.pickup)}<br>${escapeHtml(order.customerName || "")}`);
     map.setView([pickup.lat, pickup.lon], 16);
-    $("mapNavBtn").href = `https://www.google.com/maps/dir/?api=1&destination=${pickup.lat},${pickup.lon}&travelmode=driving`;
-    $("mapNavBtn").hidden = false;
     setMapInfo(pickup.exact === false
       ? "Exact house not found — pin shows the nearest area. Call the customer to confirm."
       : "Client pick-up found.");
   } else {
-    setMapInfo("Could not find the pick-up address on the map. Call the customer to confirm.");
+    setMapInfo("Could not find the pick-up pin, but you can still tap Navigate: Google Maps will search the address text. Call the customer to confirm.");
   }
+  updateNavLinks();   // works even when no pin was found (falls back to the address text)
 
   const dropoff = await locate(order, "dropoff");
   if (token !== mapToken) return;
@@ -488,6 +525,7 @@ async function showMap(id) {
     L.marker([dropoff.lat, dropoff.lon], { icon: pinIcon("🏁") }).addTo(mapLayer)
       .bindPopup(`<strong>Drop-off</strong><br>${escapeHtml(order.dropoff)}`);
   }
+  updateNavLinks();
 
   startTracking();          // shows the driver's own position + route
   if (myPos) drawRoutes(token);
@@ -532,6 +570,7 @@ function startTracking() {
   if (!navigator.geolocation) { setMapInfo("Your device has no GPS, so only the client's pin is shown."); return; }
   watchId = navigator.geolocation.watchPosition((pos) => {
     myPos = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+    updateNavLinks();
     if (!map) return;
     if (!meMarker) {
       meMarker = L.marker([myPos.lat, myPos.lon], { icon: pinIcon("🛵"), zIndexOffset: 1000 }).addTo(mapLayer).bindPopup("You are here");

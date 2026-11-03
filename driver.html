@@ -14,6 +14,8 @@
     .map-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
     .map-head h2 { margin: 0; font-size: 16px; }
     .map-info { font-size: 13px; margin: 8px 0 0; }
+    .map-panel .admin-actions { flex-wrap: wrap; }
+    .map-panel .admin-actions a.ghost-btn { text-decoration: none; text-align: center; }
     .map-legend { font-size: 12px; opacity: .8; margin: 4px 0 0; }
     .emoji-pin { background: none; border: 0; font-size: 28px; line-height: 28px; text-align: center;
                  filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
@@ -49,7 +51,8 @@
         <p class="map-info" id="mapInfo"></p>
         <div class="admin-actions">
           <button class="ghost-btn small" id="mapLocateBtn" type="button">My location</button>
-          <a class="ghost-btn small" id="mapNavBtn" href="#" target="_blank" rel="noopener" hidden>Open navigation</a>
+          <a class="ghost-btn small" id="mapNavBtn" href="#" target="_blank" rel="noopener" hidden>🧭 Navigate to client</a>
+          <a class="ghost-btn small" id="mapNavDropBtn" href="#" target="_blank" rel="noopener" hidden>🏁 Navigate to drop-off</a>
         </div>
       </div>
       <div class="tabs">
