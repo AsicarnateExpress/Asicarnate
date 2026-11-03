@@ -447,6 +447,7 @@ async function loadDrivers() {
       .map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
     renderDrivers();
+    renderPayouts();   // so the driver's GCash number shows in "Driver payouts"
   } catch (error) {
     console.error("Load drivers error:", error);
     $("driverList").innerHTML = `<p class="empty">Could not load drivers: ${escapeHtml(error.code || error.message)}</p>`;
@@ -892,21 +893,24 @@ function renderPayouts() {
     <div><strong>${peso2(paid)}</strong><span>Paid out</span></div>
     <div><strong>${payouts.length}</strong><span>Payouts</span></div>`;
 
+  // Keep anything already typed, because render() can run again (search, refresh...)
+  const typed = {};
+  $("payoutOwed").querySelectorAll("[data-payout-ref]").forEach((i) => { typed[i.dataset.payoutRef] = i.value; });
+
   $("payoutOwed").innerHTML = list.length ? list.map((g) => {
     const d = drivers.find((x) => x.id === g.driverId);
     return `
-      <article class="booking-card">
-        <div class="booking-top">
-          <h3>${peso2(g.amount)} · ${escapeHtml(g.name)}</h3>
-          <span class="gx-stamp wait">To pay</span>
-        </div>
-        <p>Send to GCash: <strong>${escapeHtml(d?.phone || "(ask the driver)")}</strong></p>
-        <p>Orders: ${escapeHtml(g.orders.map((o) => o.orderNo).join(", "))}</p>
-        <p class="hint">Driver share is ${Math.round((1 - PLATFORM_RATE) * 100)}% of each GCash order.</p>
-        <div class="admin-actions">
-          <button type="button" class="main-btn small" data-payout="${g.driverId}">Mark as paid</button>
-        </div>
-      </article>`;
+      <div class="gx-pay">
+        <p class="gx-name">Pay ${escapeHtml(g.name)} by GCash</p>
+        <p class="gx-num">${escapeHtml(d?.phone || "(driver phone not found)")}</p>
+        <p class="gx-amt">${peso2(g.amount)}</p>
+        <p class="hint">${g.orders.length} GCash order${g.orders.length === 1 ? "" : "s"} · ${Math.round((1 - PLATFORM_RATE) * 100)}% driver share</p>
+        <p class="hint">Orders: ${escapeHtml(g.orders.map((o) => o.orderNo).join(", "))}</p>
+        <label for="payoutRef-${g.driverId}">GCash reference no.</label>
+        <input id="payoutRef-${g.driverId}" data-payout-ref="${g.driverId}" inputmode="numeric" maxlength="13" placeholder="13-digit reference number" value="${escapeHtml(typed[g.driverId] || "")}">
+        <p class="hint">Send the exact amount in your GCash app first, then enter the reference number from the receipt.</p>
+        <button type="button" class="main-btn" data-payout="${g.driverId}">Submit payout</button>
+      </div>`;
   }).join("") : `<p class="empty">You don't owe any driver right now. ✅</p>`;
 
   $("payoutList").innerHTML = payouts.length ? payouts.map((p) => `
@@ -920,6 +924,11 @@ function renderPayouts() {
       <p class="hint">${new Date(p.createdMs || 0).toLocaleString()}</p>
     </article>`).join("") : `<p class="empty">No payouts yet.</p>`;
 
+  // Reference number: digits only, max 13
+  $("payoutOwed").querySelectorAll("[data-payout-ref]").forEach((input) =>
+    input.addEventListener("input", (e) => {
+      e.target.value = e.target.value.replace(/\D/g, "").slice(0, 13);
+    }));
   $("payoutOwed").querySelectorAll("[data-payout]").forEach((btn) =>
     btn.addEventListener("click", () => payDriver(btn.dataset.payout, btn)));
 }
@@ -931,9 +940,10 @@ async function payDriver(driverId, button) {
   const amount = Math.round(orders.reduce((s, o) => s + driverShare(o), 0) * 100) / 100;
   const name = orders[0].driverName || driverId;
 
-  const ref = (prompt(`Pay ${peso2(amount)} to ${name} by GCash first.\n\nThen type the 13-digit GCash reference no.:`) || "").replace(/\s/g, "");
-  if (!ref) return;
+  const input = document.querySelector(`[data-payout-ref="${driverId}"]`);
+  const ref = (input?.value || "").replace(/\D/g, "");
   if (!/^\d{13}$/.test(ref)) { showMessage("The GCash reference number must be exactly 13 digits."); return; }
+  if (!confirm(`Submit payout of ${peso2(amount)} to ${name} with ref ${ref}?\n\nOnly confirm if you already sent it by GCash.`)) return;
   if (payouts.some((p) => String(p.gcashRef) === ref)) { showMessage("That reference number was already used for another payout."); return; }
 
   button.disabled = true;
