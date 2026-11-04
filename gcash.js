@@ -26,7 +26,9 @@
       'within 24 hours after the trip, then sends the GCash reference no. to admin.',
     slotHours: 2,                    // how long one booking blocks the vehicle
     defaultFleet: 1,                 // vehicles available per type
-    fleet: {},                       // e.g. { motorcycle: 3, van: 1 }  (key = vehicle id: motorcycle, sedan, van, truck)
+    // How many drivers you have for each vehicle. A time slot is only "booked" when ALL drivers of
+    // that vehicle are busy. Change these numbers when you add or remove a driver.
+    fleet: { motorcycle: 3, sedan: 2, van: 1, truck: 1 },   // keys = vehicle ids
     adminPanels: false               // old browser-only GCash/remittance panels on admin.html (the new
                                      // remittance panel in admin.js uses Firebase instead). Set true to show them.
   };
@@ -128,9 +130,16 @@
     function refreshAvail() {
       var id = selectedVehicleId(), v = selectedVehicle(), s = startTime();
       if (!id || !v || s == null) { avail.className = 'gx-avail'; avail.textContent = ''; return; }
+      if (val('dlWhen') === 'later' && s < Date.now()) {
+        avail.className = 'gx-avail bad';
+        avail.textContent = '⚠️ ' + fmt(s) + ' has already passed. Please choose a later time or date.';
+        return;
+      }
       if (isAvailable(id, s)) {
         avail.className = 'gx-avail ok';
-        avail.textContent = '✅ ' + v + ' is available on ' + fmt(s) + '.';
+        var total = fleetSize(id), left = total - takenCount(id, s);
+        avail.textContent = '✅ ' + v + ' is available on ' + fmt(s) + '.' +
+          (total > 1 ? ' (' + left + ' of ' + total + ' drivers free)' : '');
       } else {
         avail.className = 'gx-avail bad';
         avail.textContent = '❌ ' + v + ' is already booked on ' + fmt(s) +
@@ -188,7 +197,9 @@
       var ref = val('gxRef').replace(/\s+/g, '');
       var error = '';
 
-      if (id && s != null && !isAvailable(id, s)) {
+      if (val('dlWhen') === 'later' && s != null && s < Date.now()) {
+        error = 'That pick-up time has already passed. Choose a later time today, or another date.';
+      } else if (id && s != null && !isAvailable(id, s)) {
         error = v + ' is already booked on ' + fmt(s) + '. Please choose another time, date or vehicle.';
       } else if (isGcash && v) {
         if (!/^\d{13}$/.test(ref)) {

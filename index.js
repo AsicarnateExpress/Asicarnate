@@ -415,6 +415,31 @@ function todayString() {
     String(d.getDate()).padStart(2, "0");
 }
 
+// "Schedule for later": if the picked date is today and the time already passed,
+// move the time to the next full hour (or to tomorrow 9:00 AM late at night).
+function fixLaterTime() {
+  const dateEl = getElement("dlDate");
+  const timeEl = getElement("dlTime");
+  if (!dateEl || !timeEl) return;
+
+  const now = new Date();
+  if (!dateEl.value) dateEl.value = todayString();
+  if (dateEl.value !== todayString()) return;
+
+  const picked = new Date(`${dateEl.value}T${timeEl.value || "00:00"}`);
+  if (!isNaN(picked) && picked > now) return; // already in the future, leave it
+
+  if (now.getHours() >= 23) {
+    const t = new Date(now.getTime() + 24 * 3600000);
+    dateEl.value = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + "-" + String(t.getDate()).padStart(2, "0");
+    timeEl.value = "09:00";
+  } else {
+    timeEl.value = String(now.getHours() + 1).padStart(2, "0") + ":00";
+  }
+  // tell gcash.js so the availability banner refreshes
+  timeEl.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 function calcFare(vehicle, km, helper, roundTrip) {
   const base = vehicle.base;
   const distance = vehicle.perKm * km;
@@ -561,8 +586,11 @@ function updateFare() {
   getElement(id)?.addEventListener("input", updateFare)
 );
 
+getElement("dlDate")?.addEventListener("change", fixLaterTime);
+
 getElement("dlWhen")?.addEventListener("change", () => {
   setVisible("dlLater", getElement("dlWhen").value === "later");
+  if (getElement("dlWhen").value === "later") fixLaterTime();
   getElement("orderBtn").textContent =
     getElement("dlWhen").value === "later" ? "Book for later" : "Book now";
 });
@@ -1003,8 +1031,11 @@ getElement("orderForm")?.addEventListener("submit", async (event) => {
     const time = getElement("dlTime").value;
     const at = new Date(`${date}T${time}`);
 
-    if (!date || !time || isNaN(at) || at < new Date()) {
-      return fail("Choose a pick-up date and time in the future.");
+    if (!date || !time || isNaN(at)) {
+      return fail("Choose the pick-up date and time.");
+    }
+    if (at < new Date()) {
+      return fail("That pick-up time has already passed. Choose a later time today, or another date.");
     }
     scheduledFor = `${date} ${time}`;
   }
