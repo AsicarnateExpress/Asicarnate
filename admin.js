@@ -448,9 +448,24 @@ async function loadDrivers() {
       .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
     renderDrivers();
     renderPayouts();   // so the driver's GCash number shows in "Driver payouts"
+    syncFleet();       // adding a driver updates how many can be booked
   } catch (error) {
     console.error("Load drivers error:", error);
     $("driverList").innerHTML = `<p class="empty">Could not load drivers: ${escapeHtml(error.code || error.message)}</p>`;
+  }
+}
+
+// Public driver count per vehicle (no personal details). Customers read this to know
+// how many drivers you have for each vehicle. Kept up to date automatically.
+async function syncFleet() {
+  const counts = { motorcycle: 0, sedan: 0, van: 0, truck: 0 };
+  drivers.forEach((d) => {
+    if (d.active !== false && counts[d.vehicleId] !== undefined) counts[d.vehicleId]++;
+  });
+  try {
+    await setDoc(doc(db, "fleet", "counts"), { ...counts, updatedMs: Date.now() });
+  } catch (error) {
+    console.warn("Driver counts not saved:", error.code || error.message);
   }
 }
 
@@ -536,6 +551,7 @@ async function toggleDriver(id, button) {
   try {
     await updateDoc(doc(db, "drivers", id), { active: makeActive });
     d.active = makeActive;
+    syncFleet();
     showMessage(`${d.name} is now ${makeActive ? "active" : "disabled"}.`, true);
     renderDrivers();
   } catch (error) {

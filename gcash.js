@@ -61,6 +61,9 @@
   }
   function val(id) { var el = $(id); return el ? String(el.value || '').trim() : ''; }
   function fleetSize(vehicleId) {
+    // live count from Firebase (admin adds/disables drivers), else the numbers in CONFIG
+    var live = window.gxFleet;
+    if (live && typeof live[vehicleId] === 'number') return live[vehicleId];
     return CONFIG.fleet[vehicleId] != null ? CONFIG.fleet[vehicleId] : CONFIG.defaultFleet;
   }
 
@@ -142,8 +145,9 @@
           (total > 1 ? ' (' + left + ' of ' + total + ' drivers free)' : '');
       } else {
         avail.className = 'gx-avail bad';
-        avail.textContent = '❌ ' + v + ' is already booked on ' + fmt(s) +
-          '. Please pick another time, date or vehicle.';
+        avail.textContent = fleetSize(id) === 0
+          ? '❌ No ' + v + ' driver is available right now. Please pick another vehicle.'
+          : '❌ ' + v + ' is already booked on ' + fmt(s) + '. Please pick another time, date or vehicle.';
       }
     }
 
@@ -200,7 +204,9 @@
       if (val('dlWhen') === 'later' && s != null && s < Date.now()) {
         error = 'That pick-up time has already passed. Choose a later time today, or another date.';
       } else if (id && s != null && !isAvailable(id, s)) {
-        error = v + ' is already booked on ' + fmt(s) + '. Please choose another time, date or vehicle.';
+        error = fleetSize(id) === 0
+          ? 'No ' + v + ' driver is available right now. Please choose another vehicle.'
+          : v + ' is already booked on ' + fmt(s) + '. Please choose another time, date or vehicle.';
       } else if (isGcash && v) {
         if (!/^\d{13}$/.test(ref)) {
           error = 'Enter the 13-digit GCash reference no. after you pay.';

@@ -1250,8 +1250,19 @@ window.logout = async function () {
 // Completed and cancelled orders are not in this list, so those vehicles are free again.
 let stopSlots = null;
 
+let stopFleet = null;
+
 function watchSlots() {
   if (stopSlots) return;
+  // How many drivers you have for each vehicle (written by the admin page)
+  stopFleet = onSnapshot(
+    doc(db, "fleet", "counts"),
+    (snap) => {
+      window.gxFleet = snap.exists() ? snap.data() : null;
+      document.dispatchEvent(new Event("gx-slots"));
+    },
+    (error) => console.warn("Driver counts not loaded:", error.code || error.message)
+  );
   stopSlots = onSnapshot(
     query(collection(db, "slots"), where("active", "==", true)),
     (snap) => {
@@ -1270,7 +1281,9 @@ onAuthStateChanged(auth, (user) => {
     currentUser = null;
     currentProfile = null;
     if (stopSlots) { stopSlots(); stopSlots = null; }
+    if (stopFleet) { stopFleet(); stopFleet = null; }
     window.gxSlots = null;
+    window.gxFleet = null;
     showOnly("loginBox");
   }
 });
