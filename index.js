@@ -792,6 +792,32 @@ function startPick(kind) {
   }
 }
 
+// Use the phone's GPS as the pick-up address
+getElement("dlMyLocBtn")?.addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    setKmStatus("This phone or browser has no location feature. Type the address instead.", "bad");
+    return;
+  }
+  setKmStatus("Getting your location...");
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      initMap();
+      await choosePoint("pickup", latitude, longitude);
+      routeMap?.setView([latitude, longitude], 16);
+    },
+    (error) => {
+      setKmStatus(
+        error.code === 1
+          ? "Location is blocked. Allow location for this site in your browser settings, then try again."
+          : "Couldn't get your location. Try again, or type the address.",
+        "bad"
+      );
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+});
+
 getElement("dlPickMapBtn")?.addEventListener("click", () => startPick("pickup"));
 getElement("dlDropMapBtn")?.addEventListener("click", () => startPick("dropoff"));
 
@@ -1181,12 +1207,20 @@ async function loadOrders() {
           <p>🕒 ${escapeHtml(o.scheduledFor)}${o.helper ? " · helper" : ""}${o.roundTrip ? " · round trip" : ""}</p>
           <p class="price">Total: ${money(o.total)} · ${escapeHtml(o.payment)}</p>
           ${o.payment === "GCash" ? payStamp(o) : ""}
+          ${o.status === "accepted" || o.status === "ontheway"
+            ? `<p>🛵 <strong>Driver:</strong> ${escapeHtml(o.driverName || "")}${o.driverPhone ? " · " + escapeHtml(o.driverPhone) : ""}</p>
+               <button type="button" class="main-btn" data-track-order="${o.id}">📍 Track driver</button>`
+            : ""}
           ${o.status === "pending"
             ? `<button type="button" class="ghost-btn small danger" data-cancel-order="${o.id}">Cancel order</button>`
             : ""}
         </article>
       `;
     }).join("");
+
+    list.querySelectorAll("[data-track-order]").forEach((btn) =>
+      btn.addEventListener("click", () => openTracker(btn.dataset.trackOrder))
+    );
 
     list.querySelectorAll("[data-cancel-order]").forEach((btn) =>
       btn.addEventListener("click", () => cancelOrder(btn.dataset.cancelOrder))
@@ -1196,6 +1230,145 @@ async function loadOrders() {
     console.error("Load orders error:", error);
     list.innerHTML = `<p class="empty">Could not load orders: ${escapeHtml(error.code || error.message)}</p>`;
   }
+}
+
+
+/* ======================================================================
+   LIVE DRIVER TRACKING
+   The driver's phone writes its position to tracking/{orderId} while a trip
+   is active. This screen listens to that document and moves the pin.
+   ====================================================================== */
+let trackMap = null;
+let trackDriverMarker = null;
+let trackPickupMarker = null;
+let stopTrack = null;
+let trackTimer = null;
+let trackLastMs = 0;
+let trackFitted = false;
+
+function ensureTrackerPanel() {
+  let panel = getElement("trackPanel");
+  if (panel) return panel;
+
+  panel = document.createElement("div");
+  panel.id = "trackPanel";
+  panel.hidden = true;
+  panel.style.cssText =
+    "position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column;";
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;background:#3b1a8a;color:#fff;">
+      <strong id="trackTitle" style="font-size:16px;">Track driver</strong>
+      <button type="button" id="trackClose" style="background:#EEC22B;color:#3b2a00;border:0;border-radius:18px;padding:8px 14px;font-weight:700;">Close</button>
+    </div>
+    <p id="trackInfo" style="margin:0;padding:10px 14px;font-size:14px;color:#3b1a8a;background:#f4f0ff;">Looking for your driver...</p>
+    <div id="trackMap" style="flex:1;min-height:300px;"></div>`;
+  document.body.appendChild(panel);
+  getElement("trackClose").addEventListener("click", closeTracker);
+  return panel;
+}
+
+function trackAgo(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 10) return "just now";
+  if (s < 60) return s + " seconds ago";
+  const m = Math.round(s / 60);
+  return m + " minute" + (m === 1 ? "" : "s") + " ago";
+}
+
+function refreshTrackInfo(order) {
+  const info = getElement("trackInfo");
+  if (!info) return;
+  if (!trackLastMs) {
+    info.textContent = "Waiting for " + (order.driverName || "your driver") +
+      " to share their location. The driver needs to have the driver page open.";
+    return;
+  }
+  const old = Date.now() - trackLastMs > 120000;
+  info.textContent = (old ? "Last seen " : "Live: ") + (order.driverName || "Driver") + " · updated " + trackAgo(trackLastMs);
+}
+
+function openTracker(orderId) {
+  const order = loadedOrders.find((o) => o.id === orderId);
+  if (!order) return;
+
+  if (typeof L === "undefined") {
+    alert("The map couldn't load. Check your internet connection and try again.");
+    return;
+  }
+
+  const panel = ensureTrackerPanel();
+  panel.hidden = false;
+  getElement("trackTitle").textContent = "Driver for " + order.orderNo;
+  trackLastMs = 0;
+  trackFitted = false;
+  refreshTrackInfo(order);
+
+  if (!trackMap) {
+    trackMap = L.map("trackMap").setView(MAP_CENTER, 12);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(trackMap);
+  }
+  setTimeout(() => trackMap.invalidateSize(), 150);
+
+  const pin = (emoji) => L.divIcon({
+    className: "",
+    html: `<div style="font-size:30px;line-height:30px;text-align:center;filter:drop-shadow(0 2px 2px rgba(0,0,0,.4))">${emoji}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 28]
+  });
+
+  // Your pick-up point
+  if (trackPickupMarker) { trackMap.removeLayer(trackPickupMarker); trackPickupMarker = null; }
+  if (trackDriverMarker) { trackMap.removeLayer(trackDriverMarker); trackDriverMarker = null; }
+  if (order.pickupLat != null && order.pickupLon != null) {
+    trackPickupMarker = L.marker([order.pickupLat, order.pickupLon], { icon: pin("📍") })
+      .addTo(trackMap).bindPopup("Pick-up");
+    trackMap.setView([order.pickupLat, order.pickupLon], 14);
+  }
+
+  if (stopTrack) stopTrack();
+  stopTrack = onSnapshot(
+    doc(db, "tracking", orderId),
+    (snap) => {
+      if (!snap.exists()) { refreshTrackInfo(order); return; }
+      const t = snap.data();
+      if (typeof t.lat !== "number" || typeof t.lon !== "number") return;
+      trackLastMs = t.ms || Date.now();
+
+      if (!trackDriverMarker) {
+        trackDriverMarker = L.marker([t.lat, t.lon], { icon: pin("🛵"), zIndexOffset: 1000 })
+          .addTo(trackMap).bindPopup(order.driverName || "Driver");
+      } else {
+        trackDriverMarker.setLatLng([t.lat, t.lon]);
+      }
+
+      if (!trackFitted) {
+        trackFitted = true;
+        const pts = [[t.lat, t.lon]];
+        if (trackPickupMarker) pts.push(trackPickupMarker.getLatLng());
+        trackMap.fitBounds(pts, { padding: [50, 50], maxZoom: 16 });
+      }
+      refreshTrackInfo(order);
+    },
+    (error) => {
+      console.warn("Tracking error:", error.code || error.message);
+      getElement("trackInfo").textContent =
+        "Can't load the driver's location (" + (error.code || "error") + ").";
+    }
+  );
+
+  // keep the "updated x seconds ago" text fresh
+  clearInterval(trackTimer);
+  trackTimer = setInterval(() => refreshTrackInfo(order), 5000);
+}
+
+function closeTracker() {
+  if (stopTrack) { stopTrack(); stopTrack = null; }
+  clearInterval(trackTimer);
+  const panel = getElement("trackPanel");
+  if (panel) panel.hidden = true;
 }
 
 async function cancelOrder(orderId) {

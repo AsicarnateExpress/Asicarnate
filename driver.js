@@ -31,7 +31,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, getDocs, collection, query, where,
-  runTransaction, writeBatch, updateDoc
+  runTransaction, writeBatch, updateDoc, setDoc
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
 // ---------- Firebase ----------
@@ -117,7 +117,11 @@ $("logoutBtn").addEventListener("click", async () => {
 });
 
 onAuthStateChanged(auth, async (user) => {
-  if (!user) { me = null; driver = null; closeMap(); show("login"); return; }
+  if (!user) {
+    if (shareWatch !== null) navigator.geolocation?.clearWatch(shareWatch);
+    shareWatch = null;
+    me = null; driver = null; closeMap(); show("login"); return;
+  }
   me = user;
 
   let snap = null;
@@ -225,6 +229,7 @@ function render() {
     : `<p class="empty">You have no trips yet.</p>`;
 
   renderRemit(due, dueAmount);
+  syncLocationSharing();
 }
 
 function renderRemit(due, dueAmount) {
@@ -310,6 +315,55 @@ async function syncSlot(orderId, status) {
   } catch (error) {
     console.warn("Availability not updated:", error.code || error.message);
   }
+}
+
+
+/* ======================================================================
+   SHARE LIVE LOCATION WITH THE CLIENT
+   While the driver has an accepted / on-the-way trip and this page is open,
+   the phone's position is saved to tracking/{orderId} so the client can see it.
+   ====================================================================== */
+let shareWatch = null;
+let lastShare = { ms: 0, lat: null, lon: null };
+
+function activeTrips() {
+  return myOrders.filter((o) => o.status === "accepted" || o.status === "ontheway");
+}
+
+function syncLocationSharing() {
+  if (!activeTrips().length) {
+    if (shareWatch !== null) navigator.geolocation?.clearWatch(shareWatch);
+    shareWatch = null;
+    return;
+  }
+  if (shareWatch !== null || !navigator.geolocation) return;
+
+  shareWatch = navigator.geolocation.watchPosition(
+    (pos) => {
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      const now = Date.now();
+      const moved = lastShare.lat == null
+        ? Infinity
+        : Math.hypot((lat - lastShare.lat) * 111000, (lon - lastShare.lon) * 111000);
+
+      // write at most every 8 s, and only if moved 10 m (or every 30 s)
+      if (now - lastShare.ms < 8000 || (moved < 10 && now - lastShare.ms < 30000)) return;
+      lastShare = { ms: now, lat, lon };
+
+      activeTrips().forEach((o) => {
+        setDoc(doc(db, "tracking", o.id), {
+          orderId: o.id,
+          driverId: me.uid,
+          driverName: driver.name || "",
+          customerUid: o.uid,
+          lat, lon,
+          ms: now
+        }).catch((err) => console.warn("Share location:", err.code || err.message));
+      });
+    },
+    (err) => console.warn("GPS share:", err.message),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
 }
 
 async function advance(id, btn) {
